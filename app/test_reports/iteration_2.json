@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 2 tested the new features and the earlier fixes. Backend: 22/22 pytest tests passed when run serially. These cover multi-type rounds (POST/PUT/legacy single type), attachment upload of png and pdf, list, download with ?token=, 401 for a missing or bad token, delete followed by a 404, upload to an unknown round returning 404, and search with special characters on applications and questions. Frontend (375x667 web preview): every requested flow passed. Type chips are multi-select and Save is disabled when no type is selected. 'Technical + Behavioral + AI' shows in the application timeline and the round detail Type row. Editing a round preloads its types and saving the edit updates them. The form's Gallery and Files buttons open the file chooser (multiple selection enabled). Picked files show as pending thumbnails, the remove button works, and the files upload after save-round and appear on round detail. On round detail, upload-gallery and upload-doc work, the image thumbnail renders (naturalWidth 120), and delete-attachment plus confirm removes the attachment. Earlier fixes still hold: saving a question or deleting a round on a directly-opened screen goes to the fallback route with no GO_BACK error, 'View answer' is hidden when a question has no answer, the dashboard bar chart shows month names ('Nov') and an integer y-axis (0-3), and Add question is 44px tall. No deprecated Expo packages found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/rounds/{id}", "issue": "Does not check that the new application_id belongs to the user, and does not refresh company_name when application_id changes."},
+      {"endpoint": "POST/PUT /api/rounds", "issue": "interview_types is not checked against the allowed INTERVIEW_TYPES list and duplicates are not removed. Any string is accepted."},
+      {"endpoint": "DELETE /api/attachments/{id}", "issue": "Deletes only the Mongo record. The stored object is left behind as an orphan. This is acceptable if the storage service has no delete API."},
+      {"endpoint": "GET /api/attachments/{id}/file?token=", "issue": "The session token is passed in the URL query, so it can leak into proxy and access logs. A short-lived signed download token would be safer."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Round form", "issues": ["ChipRow chips (round-type-*, round-status-*, etc.) are 36px tall, under the 44px minimum touch target.", "The remove-pending-* button is 22x22 (hitSlop 10 brings it to about 42px). Borderline."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter2_multitype_attachments.py", "/app/backend/tests/test_interview_tracker_api.py", "/app/test_reports/pytest/pytest_results_iter2.xml"],
+  "action_items": [
+    "(Minor) Raise ChipRow chip height to at least 44px, or add hitSlop.",
+    "(Minor) Validate interview_types against the allowed list and remove duplicates; on PUT, verify ownership of application_id."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 699 lines, close to the 700-line split threshold. Consider moving the attachments and storage code into its own module.",
+    "On edit, round/new.tsx copies the whole existing doc (round_id, user_id, created_at) into the PUT body. Pydantic drops the extra fields, so nothing breaks, but it would be cleaner to send only form fields.",
+    "The test_interview_tracker_api.py dashboard-count tests are flaky when run in parallel with other test files under pytest-xdist, because they compare global counts. Run them with -n0."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter2_multitype_attachments.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Created TEST_Iter2Co and TEST_UICo applications, their rounds, attachments and questions. All were deleted by id afterwards; the application delete cascades to rounds, questions and attachments.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Auth: set localStorage session_token_v1=test_session_token_123. The backend URL env key is EXPO_PUBLIC_BACKEND_URL. Run pytest with -n0: the xdist parallel run makes test_dashboard_updates and test_delete_cascade fail because of shared global counts. Web file pickers work with page.expect_file_chooser. Container clock is 2026-11.",
+  "flaky_tests": ["test_interview_tracker_api.py::test_dashboard_updates and ::test_delete_cascade fail under xdist parallel runs (2 of 2 attempts in parallel) and pass serially."]
+}

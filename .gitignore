@@ -1,0 +1,36 @@
+# Secrets and local config: never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+*credentials.json*
+*token.json*
+memory/test_credentials.md
+
+# Local data (database, uploads, APK builds)
+web/backend/data/
+*.db
+*.sqlite3
+*.apk
+*.aab
+
+# Dependencies and builds
+node_modules/
+.venv/
+venv/
+dist/
+build/
+.expo/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.tsbuildinfo
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

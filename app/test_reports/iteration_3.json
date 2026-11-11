@@ -1,0 +1,47 @@
+{
+  "summary": "Tested the spreadsheet and PDF export endpoints and the offer card. Core flows work: /api/export/sheet returns an xlsx with 4 tabs and only the current user's data (Bearer and ?token= both work, 401 without a token). /api/export/pdf returns a valid PDF: images are embedded, attached PDFs are appended, video files are skipped, broken image/PDF files degrade gracefully, and requests for an unknown or another user's application_id return 404. The <b> and & characters are escaped correctly. On the web, the Profile export buttons download .xlsx/.pdf and show export-message. app-export-pdf-btn downloads the per-application PDF. share-offer-button appears only for Offer Received/Accepted. The offer card shows the company, role, rounds, days and questions plus the round journey. The share buttons do not crash. The /api/sheets/* and oauth callback routes are gone (404/405), and the Profile screen has no Google Sheets UI. Bugs found: the rupee symbol does not render in the PDF; formula injection and a 500 error on control characters in the xlsx export; zero counts show as blank in the PDF; the web share fallback shows error text instead of the intended note; pluralization in the post text. Deprecated packages detected: none. SafeAreaView issues detected: none.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/export/pdf", "issue": "The ₹ (U+20B9) symbol renders as a missing glyph (\\x00 box). The bundled reportlab Vera/VeraBd fonts have no rupee glyph, and CTC values are typically in INR. Fix: register a Unicode TTF (e.g. Noto Sans or FreeSans from /usr/share/fonts/truetype/noto|freefont, or ship DejaVuSans.ttf in /app/backend/fonts) instead of Vera. Reference: /app/backend/exports.py:30-32"},
+      {"endpoint": "GET /api/export/sheet", "issue": "Formula/CSV injection: any text field starting with '=' (e.g. company_name '=HYPERLINK(...)') is written as a live formula (cell data_type 'f'). Fix: in _cell(), prefix strings that start with = + - @ with an apostrophe, or set cell.data_type='s'. Reference: /app/backend/exports.py:74-81"},
+      {"endpoint": "GET /api/export/sheet", "issue": "Returns 500 (openpyxl IllegalCharacterError) when any stored text has a control character (e.g. \\x07, \\x0b). One bad notes/feedback value breaks the whole export. Fix: strip characters with openpyxl.cell.cell.ILLEGAL_CHARACTERS_RE.sub('', v) in _cell()."},
+      {"endpoint": "GET /api/export/pdf", "issue": "Zero values render blank: P() uses str(text or ''), so the cover's 'Interview rounds: 0', 'Questions logged: 0' and 'Attachments: 0' show an empty value. Fix: use '' only when text is None. Reference: /app/backend/exports.py:118"},
+      {"endpoint": "GET /api/export/sheet|pdf ?token=", "issue": "The session token is sent in the URL query string, so it ends up in ingress/access logs. On web, downloadAndShare already uses fetch(), so it could send an Authorization header instead. The query token is only needed for native File.downloadFileAsync (which also accepts headers). Reference: /app/frontend/src/exports.ts:10"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Offer card share buttons (web)", "issue": "On web browsers without navigator.share (desktop Chrome/Firefox, Playwright), Share.share rejects. Tapping offer-share-text-button shows 'Couldn't open sharing. Please try again.' and offer-share-image-button shows 'Couldn't create the image. Please try again.' The intended fallback note ('Image sharing works in the mobile app...') is never shown. There is no crash. Fix: on web, check navigator.share; if it is missing, copy postText to the clipboard (navigator.clipboard / expo-clipboard) and show a 'Post text copied' note. The 'Share post text' button also has a Copy icon but never copies. Reference: /app/frontend/app/application/offer/[id].tsx:59-62,78-84", "testID": "offer-share-text-button, offer-share-image-button, offer-share-note", "priority": "MEDIUM"},
+      {"component": "Offer post text", "issue": "Pluralization bug: shows '1 questions tackled'. The stat label correctly says 'questions' for all counts, but the post text should say '1 question'. Reference: /app/frontend/app/application/offer/[id].tsx:53", "testID": "offer-post-text", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Offer card", "issues": ["The card has minHeight 420, which leaves a large empty gap between the journey and the footer when there are only 1-2 rounds (Cisco case)", "'Days to offer' is computed from applied_date to updated_at. Any later edit to the application (notes, CTC) inflates the number. Consider storing a status_changed_at/offer_date when the status becomes Offer Received/Accepted."]},
+      {"screen": "Application detail header", "issues": ["app-export-pdf-btn touch target is 40x40, below the 44pt minimum (the edit and delete icons are the same size)"]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter4_exports.py", "/app/test_reports/pytest/pytest_iter4.xml", "/app/test_reports/pytest/pytest_iter4_all.xml"],
+  "action_items": [
+    "exports.py: register a Unicode font that has ₹ (Noto Sans or FreeSans) instead of Vera/VeraBd for the PDF",
+    "exports.py _cell(): strip ILLEGAL_CHARACTERS_RE and escape leading = + - @ to prevent a 500 error and formula injection in the xlsx",
+    "exports.py P(): don't turn 0 into an empty string",
+    "offer/[id].tsx: add a web fallback when navigator.share is missing (copy to clipboard + note) instead of showing error text; fix '1 questions' pluralization",
+    "Delete or update the obsolete /app/backend/tests/test_iter3_sheets_offer.py (it tests the removed /api/sheets/* routes)",
+    "Optional: pass the token via Authorization header instead of the query string for exports; enlarge header icon buttons to 44x44; track the offer date for 'days to offer'"
+  ],
+  "critical_code_review_comments": [
+    "exports.py only includes attachments that have a round_id. That is fine today, because upload requires round_id.",
+    "Export auth duplicates the session lookup in server.py download_attachment (DRY). Extract a shared get_user_from_token helper.",
+    "Large accounts: the whole report is built in memory (to_list up to 20k docs plus all attachment bytes). Acceptable for an MVP, but there is no size cap on embedded attachments.",
+    "server.py is 709 lines (>700). Consider splitting routers."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter4_exports.py (new)"],
+  "success_rate": {"backend": "91% (16/19 export tests pass; 3 failures: rupee glyph, formula injection, control-char 500)", "frontend": "90% (all flows work; the web share fallback shows error text)"},
+  "seed_data_creation": "No persistent seed data. The tests create TEST_ apps and a TEST_ second user, then delete them by id. Pre-existing TEST_AppliedCo and TEST_AcceptedCo (not created by this run) were used read-only for the banner visibility check.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && python -m pytest tests/test_iter4_exports.py. pytest.ini enables xdist (-n). test_interview_tracker_api.py::test_dashboard_updates is flaky when run in parallel with other files that create apps for the same user (count assertion); it passes when the file runs alone. test_iter3_sheets_offer.py is obsolete. Web login: localStorage session_token_v1=test_session_token_123. Cisco app app_bcb08632c3dc is Offer Received, with 1 round, 1 question, and image+pdf attachments.",
+  "rca_of_issue": "Rupee: reportlab Vera.ttf has no U+20B9 glyph (verified with TTFontFile.charToGlyph). Sheet 500: backend log shows openpyxl.utils.exceptions.IllegalCharacterError. Share notes: react-native-web Share.share rejects when navigator.share is undefined, which lands in the catch blocks."
+}

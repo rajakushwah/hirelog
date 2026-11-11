@@ -1,0 +1,55 @@
+{
+  "summary": "First run on the Interview Tracker app. Backend: 13 of 15 pytest tests pass. Auth/me, Applications CRUD with status and q filters, cascade delete, Rounds CRUD with application_id/status/upcoming filters, Questions CRUD with round_id/category/q filters, dashboard stats updates and data isolation between users all work. CRITICAL: attachment upload fails with 500 'storage_not_initialized' because EMERGENT_LLM_KEY is missing from backend/.env and the environment. Search with regex special characters (e.g. 'C++(') causes a 500. Frontend at 390x844: login renders, the seeded token logs in, all 5 tabs navigate, the dashboard shows stats and charts, and these flows work: create app via FAB, search, status filter, detail, edit, add round, timeline, add question, Questions tab category filter and search, remove question via ConfirmSheet, delete round, delete application, theme toggle (persists across reload) and logout. On web, upload shows 'Upload failed: HTTP 500' (backend root cause). No deprecated Expo packages detected (no expo-av, expo-barcode-scanner or expo-background-fetch).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/attachments/upload (and GET /api/attachments/{id}/file)", "issue": "Returns 500 {detail:'upload_failed: 500: storage_not_initialized'}. RCA: EMERGENT_LLM_KEY is not in /app/backend/.env or the process env, so init_storage() returns None. The whole attachments feature is broken.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/applications?q= and GET /api/questions?q=", "issue": "q goes into $regex unescaped. Input like 'C++(' raises a Mongo regex error and returns 500. Use re.escape(q). This is realistic because users will search for 'C++'."},
+      {"endpoint": "GET /api/attachments/{id}/file", "issue": "Token auth here skips the expires_at check that get_current_user does, so expired sessions can still download files."},
+      {"endpoint": "DELETE /api/applications|rounds|questions|attachments/{id}", "issue": "Returns 200 {deleted:0} for missing or foreign ids instead of 404."},
+      {"endpoint": "DELETE /api/attachments/{id} and cascade deletes", "issue": "Deletes only the DB rows. Storage objects are orphaned. Acceptable for MVP."},
+      {"endpoint": "PUT /api/applications/{id}", "issue": "Renaming company_name does not update the denormalized company_name on interview_rounds, so the Interviews tab and dashboard rounds_by_company show the old name."},
+      {"endpoint": "POST/PUT /api/questions", "issue": "round_id/application_id are not checked for ownership. A user can attach a question to any id string. It does not leak data because rows are scoped by user_id."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Delete/save on deep-linked screens (round/[id], application/[id], forms)", "issue": "All 10 save/delete handlers call router.back() unconditionally. When the screen was opened directly by URL, refresh or deep link, there is no history, so the app shows the error toast \"The action 'GO_BACK' was not handled\" and stays on the stale screen still showing the deleted record. Use router.canGoBack() ? router.back() : router.replace('/(tabs)/...'). Normal in-app navigation works correctly.", "testID": "delete-round / delete-btn / save-*", "priority": "MEDIUM"},
+      {"component": "Questions tab card", "issue": "'View answer' / 'Hide answer' toggle shows even when the question has no answer. Toggling it does nothing. Ref app/(tabs)/questions.tsx:74", "testID": "question-{id}", "priority": "LOW"},
+      {"component": "Round detail attachments", "issue": "There is no UI to delete an attachment, although the backend supports DELETE /api/attachments/{id}.", "testID": "attachment-{id}", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Upload attachment (Gallery/Camera/Document)", "issue": "Web document picker upload reaches the backend and the 500 is shown inline as 'Upload failed: HTTP 500'. The cause is the missing EMERGENT_LLM_KEY in the backend.", "affected_testIDs": ["upload-doc", "upload-gallery", "upload-camera", "upload-error"]}
+    ],
+    "design_issues": [
+      {"screen": "Round detail", "issues": ["'Add' question button (add-question) is 65x22px, below the 44px touch target", "'Remove' question text link is about 14px tall, below the 44px touch target"]},
+      {"screen": "Dashboard", "issues": ["'Applications by month' bar chart y-axis shows fractional labels (0.0/0.4/0.7/1.1) for integer counts. Set stepValue/maxValue so labels are integers.", "X-axis label shows only the month number ('11') instead of a month name such as 'Nov'.", "Stat testID 'stat-in progress' contains a space.", "There is no stat card for total applications, although the API returns total_applications."]},
+      {"screen": "Forms (application/round/question)", "issues": ["ChipRow children use generic testIDs chip-{opt}, which can collide across rows on one screen (e.g. Completed in status vs result rows). Prefix them with the row testID.", "Status/type ChipRows on forms have no testID.", "Back button on question/new.tsx has no testID."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_interview_tracker_api.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "CRITICAL: Add EMERGENT_LLM_KEY to /app/backend/.env (use the emergent integrations key tool), restart the backend, and re-test attachments upload, list, download and the web image preview.",
+    "Escape the user search string in the regex: {'$regex': re.escape(q)} in list_applications and list_questions.",
+    "Replace router.back() after save/delete with a canGoBack fallback to router.replace to the parent tab or screen.",
+    "Check expires_at in download_attachment token auth.",
+    "Hide 'View answer' when item.answer is empty.",
+    "Make add-question and remove-question touch targets at least 44px (padding or hitSlop).",
+    "Make dashboard bar chart y-axis labels integers and show month names on the x-axis.",
+    "Optional: add attachment delete UI, propagate company rename to rounds, return 404 on deleting missing records."
+  ],
+  "critical_code_review_comments": [
+    "server.py stores session expiry as 7 days. That is fine. Startup storage init silently logs an error when the key is missing. Consider failing fast or warning clearly.",
+    "requests (sync) is used inside run_in_threadpool for storage. That is acceptable.",
+    "No deprecated Expo packages (expo-av, expo-barcode-scanner, expo-background-fetch). No react-native SafeAreaView usage."
+  ],
+  "updated_files": ["/app/backend/tests/test_interview_tracker_api.py"],
+  "success_rate": {"backend": "87% (13/15)", "frontend": "93% (all requested flows work. Upload fails because of the backend. GO_BACK error only on deep-linked screens)"},
+  "seed_data_creation": "No permanent seed data. Created a temporary second user/session (usr_TEST_*) for the isolation test and removed it. All TEST_ applications, rounds and questions were deleted. The test_session_token_123 session was re-seeded after the logout test (expires +30d). The existing user record (Cisco app) was not touched.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && python -m pytest tests/test_interview_tracker_api.py -v (pytest.ini uses xdist loadscope). Log in on web by setting localStorage session_token_v1=test_session_token_123. Logout deletes the session row, so re-seed it in user_sessions. Pass category chips scoped like [data-testid=questions-category] [data-testid=chip-SQL]. Valid categories: Python, Golang, SQL, DSA, System Design, Kubernetes, Networking, Linux, Cloud, DevOps, Behavioral, HR, Other.",
+  "rca_of_issue": "Attachment upload 500: backend log shows HTTPException storage_not_initialized from put_object. init_storage() returns None when EMERGENT_LLM_KEY is absent. grep confirms the key is missing from backend/.env and from env. Search 500: an unescaped user string is passed to $regex."
+}

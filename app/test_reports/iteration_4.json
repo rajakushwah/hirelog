@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 4 tested per-application export plus a regression check on the iteration-3 fixes. Backend: 29 of 30 pytest tests pass (12 of 13 new iter5 tests, 17 of 17 iter4 regression tests). GET /api/export/sheet?application_id=X and /api/export/pdf?application_id=X were checked with 3 apps, using both Bearer and ?token= auth. Each export contains only the chosen app: all 4 xlsx tabs have only its rows (Applications, Rounds, 2 Questions, Attachments), and the PDF text has none of the other companies. Embedded images and appended PDFs work. Unknown app ids and other users' app ids return 404. Missing or bogus tokens return 401. The ₹ symbol renders in the PDF. Zero counts show as '0' on the PDF cover. xlsx values starting with = + @ get an apostrophe prefix. Control characters are stripped. offer_date is set once and kept when the status changes from Offer Received to Offer Accepted. One bug found: a company name containing non-Latin-1 characters (e.g. Devanagari or Chinese) makes both single-app exports return 500, because Content-Disposition is built with the raw name. Frontend (375x667 web): app-export-btn opens a sheet titled 'Export Cisco'. export-app-sheet-button downloads InterviewTracker_Cisco_YYYY-MM-DD.xlsx and export-app-pdf-button downloads the matching .pdf. I checked the downloaded files: only Cisco, 3 pages. export-app-message shows. Requests use the Authorization header with no token in the URL. export-app-close closes the sheet, and the message resets on reopen. Profile export-sheet-button and export-pdf-button download All and Report files, and the xlsx matches all of the user's apps. Offer card on desktop: Share post text copies to the clipboard (checked by reading the clipboard) and shows offer-share-note. The post text says '1 question tackled' and '1 interview round'. There is no empty gap. Deprecated packages detected: none. SafeAreaView issues detected: none.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/export/sheet?application_id=X and /api/export/pdf?application_id=X", "issue": "500 UnicodeEncodeError (latin-1) when company_name has non-Latin-1 characters (e.g. 'टाटा', '公司'). The cause is _safe_name in exports.py:91, which keeps Unicode alphanumerics (str.isalnum), and Starlette encodes headers as latin-1. Repro: create an app with company 'TEST_टाटा' and export it. Fix: limit _safe_name to ASCII [A-Za-z0-9_-], matching frontend safeName, and/or add an RFC 5987 filename*=UTF-8''... parameter."},
+      {"endpoint": "offer_date", "issue": "The existing Cisco app (already Offer Received before the feature) has offer_date=None, so 'days to offer' falls back to updated_at. Any edit to it changes the count, and the next PUT sets offer_date to today. Consider a one-time backfill (offer_date = updated_at date) for apps that are already Offer Received or Accepted."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Offer card stats", "issue": "The stat label is hard-coded to 'questions', so it reads '1 questions'. The rounds stat is singularized but this one is not. Reference: frontend/app/application/offer/[id].tsx:132", "testID": "offer-card", "priority": "low"}
+    ],
+    "integration_issues": [
+      {"flow": "Export single app with a non-Latin company name", "issue": "The backend returns 500, so the sheet shows 'Couldn't create the file'. See backend minor issue.", "affected_testIDs": ["export-app-sheet-button", "export-app-pdf-button"]}
+    ],
+    "design_issues": [
+      {"screen": "Offer card (desktop web)", "issues": ["The card has no maxWidth and stretches to 1872px wide at 1920px viewport. Consider maxWidth ~480 and centering it, since it is a shareable image card."]},
+      {"screen": "Single-app PDF", "issues": ["A single-app PDF still opens with the 'Job-search report' cover, a summary and a 1-row Applications index. For sharing one experience (e.g. Amazon), a cover titled '<Company> interview experience' would read better."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iter5_single_app_export.py", "/app/backend/tests/test_iter4_exports.py", "/app/test_reports/pytest/pytest_iter5.xml"],
+  "action_items": [
+    "Fix 500 on non-Latin-1 company names in Content-Disposition: make backend _safe_name ASCII-only (exports.py:91) and optionally add filename*=UTF-8''<urlencoded>.",
+    "Singularize the offer card 'questions' stat label for qCount === 1 (offer/[id].tsx:132).",
+    "Optional: backfill offer_date for legacy Offer Received/Accepted apps.",
+    "Optional: cap the offer card width on wide web screens. Use a single-app cover title in the per-application PDF.",
+    "Optional: encodeURIComponent(applicationId) in ExportApplicationSheet.tsx:32-33."
+  ],
+  "critical_code_review_comments": [
+    "copyOnWeb (offer/[id].tsx:59) prefers navigator.share. On desktop browsers that support it (Safari, Chrome Win/Mac), if the user cancels the share sheet, the code goes to the 'Select the suggested post' note and never tries the clipboard. Headless Chromium has no navigator.share, so the clipboard path was the one verified.",
+    "In the iter4 test file, the PNG fixture (test_iter4_exports.py:21) is an invalid PNG, so its image check passed only because of images in the appended Cisco PDF. The iter5 file uses a PIL-generated PNG; the iter4 file was not changed."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter5_single_app_export.py"],
+  "success_rate": {"backend": "97% (29/30)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "Only temporary TEST_ apps and a TEST second user/session, deleted by id after each test. Pre-existing TEST_AppliedCo and TEST_AcceptedCo apps are not mine and were left untouched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest -n0 backend/tests/test_iter5_single_app_export.py backend/tests/test_iter4_exports.py. test_non_latin1_company_name_no_500 is expected to fail until _safe_name is fixed. Web downloads use the Authorization header. Seed session: localStorage session_token_v1=test_session_token_123.",
+  "rca_of_issue": "Non-Latin-1 500: exports.py _safe_name uses ch.isalnum(), which is Unicode-aware, so Devanagari and CJK letters stay in the filename. Response headers are encoded as latin-1 by Starlette, which raises UnicodeEncodeError (confirmed in backend.err.log)."
+}

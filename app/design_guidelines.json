@@ -1,0 +1,245 @@
+{
+  "app_name": "Interview Tracker",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A professional, focused, and calm workspace that brings clarity to the chaotic job search journey.",
+  "color": {
+    "surface": "#F9FAFA",
+    "onSurface": "#1A1C1B",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#1A1C1B",
+    "surfaceTertiary": "#F1F3F2",
+    "onSurfaceTertiary": "#4A5568",
+    "surfaceInverse": "#1A1C1B",
+    "onSurfaceInverse": "#F9FAFA",
+    "brand": "#2E523A",
+    "onBrand": "#FFFFFF",
+    "brandPrimary": "#2E523A",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#E27357",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#E7F0EB",
+    "onBrandTertiary": "#2E523A",
+    "success": "#3A7553",
+    "onSuccess": "#FFFFFF",
+    "warning": "#E2A03F",
+    "onWarning": "#FFFFFF",
+    "error": "#D64F4F",
+    "onError": "#FFFFFF",
+    "info": "#4A5568",
+    "onInfo": "#FFFFFF",
+    "border": "#E2E8F0",
+    "borderStrong": "#CBD5E1",
+    "divider": "#F1F5F9",
+    "muted": "#64748B",
+    "dark": {
+      "surface": "#121413",
+      "onSurface": "#F9FAFA",
+      "surfaceSecondary": "#1C1F1D",
+      "onSurfaceSecondary": "#F9FAFA",
+      "surfaceTertiary": "#262B28",
+      "onSurfaceTertiary": "#9CA3AF",
+      "surfaceInverse": "#F9FAFA",
+      "onSurfaceInverse": "#1A1C1B",
+      "brand": "#4EA77A",
+      "onBrand": "#121413",
+      "brandPrimary": "#4EA77A",
+      "onBrandPrimary": "#121413",
+      "brandSecondary": "#E68A72",
+      "onBrandSecondary": "#121413",
+      "brandTertiary": "#1E3628",
+      "onBrandTertiary": "#4EA77A",
+      "success": "#5CB383",
+      "onSuccess": "#121413",
+      "warning": "#EAB566",
+      "onWarning": "#121413",
+      "error": "#E57373",
+      "onError": "#121413",
+      "info": "#9CA3AF",
+      "onInfo": "#121413",
+      "border": "#2D3748",
+      "borderStrong": "#4A5568",
+      "divider": "#262B28",
+      "muted": "#9CA3AF"
+    },
+    "status_mappings": {
+      "application": {
+        "Applied": "info",
+        "Screening": "brandSecondary",
+        "Interview Scheduled": "brandTertiary",
+        "Interviewing": "brandPrimary",
+        "Assignment": "warning",
+        "Offer Received": "success",
+        "Offer Accepted": "success",
+        "Offer Declined": "info",
+        "Rejected": "error",
+        "Withdrawn": "muted"
+      },
+      "interview": {
+        "Scheduled": "brandTertiary",
+        "Completed": "success",
+        "Rescheduled": "warning",
+        "Cancelled": "error"
+      },
+      "result": {
+        "Passed": "success",
+        "Failed": "error",
+        "Pending": "warning"
+      },
+      "difficulty": {
+        "Easy": "success",
+        "Medium": "warning",
+        "Hard": "error"
+      }
+    }
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Use 8pt grid. Generous padding around content. Avoid dense dashboard layouts unless purely chart-based. Sticky primary CTAs with bottom safe area clearance.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": 1,
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use on bottom tab bar over scrolling content",
+      "Use on sticky headers and bottom-sheet handles",
+      "Use as a frosted overlay on profile banners and chart headers"
+    ],
+    "dont's": [
+      "Do not use on generic form fields or list items",
+      "Do not blur entire screens or body text regions"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler",
+    "charts": "react-native-gifted-charts"
+  },
+  "screens": [
+    {
+      "name": "Dashboard",
+      "purpose": "Provides a high-level overview of the user's job search progress through actionable metrics and clean data visualization.",
+      "states": {
+        "loading": "Centered spinner with 'Gathering your stats...'",
+        "empty": "Illustration of a clean desk with prompt to 'Log your first application'",
+        "error": "Failed to load dashboard data. Retry button."
+      },
+      "layout": "Top sticky header with profile greeting and glass effect. Followed by a 2-column grid for key stats (Total Apps, Interviews, Offers, Rejections). Below that, use segmented controls to switch between chart views (Monthly Trend Line Chart vs Status Distribution Pie Chart). Generous padding (lg) around chart containers. Cards sit on 'surfaceSecondary' over 'surface' background."
+    },
+    {
+      "name": "ApplicationsList",
+      "purpose": "List all active and past job applications with quick filtering.",
+      "states": {
+        "loading": "Skeleton list of application cards.",
+        "empty": "Empty desk illustration with 'No applications match these filters' and Clear Filters CTA.",
+        "error": "Could not fetch applications. Retry."
+      },
+      "layout": "Pinned horizontal scrolling chip row for filters (Status, Date) with glassmorphism when content scrolls behind. Single-column list of application cards. Each card displays company logo (tier 1 PNG), role, date, and a styled status badge utilizing 'status_mappings'. Floating Action Button (FAB) at bottom right to add new app."
+    },
+    {
+      "name": "ApplicationDetail",
+      "purpose": "Deep dive into a single application, tracking its timeline and notes.",
+      "states": {
+        "loading": "Skeleton view of header and timeline.",
+        "empty": "No rounds scheduled yet. 'Add Interview Round' CTA.",
+        "error": "Could not load application details."
+      },
+      "layout": "Hero header with company logo and brand gradient background. The core view is a vertical timeline of Interview Rounds. Each timeline step uses a left-aligned vertical line, icon dot, and a card displaying interviewer info, platform, and result badges. Bottom sticky CTA: 'Add Round' / 'Update Status'."
+    },
+    {
+      "name": "InterviewDetail",
+      "purpose": "Specific details for a single interview round, including feedback and questions asked.",
+      "states": {
+        "loading": "Spinner.",
+        "empty": "No questions logged for this round. 'Add Question'.",
+        "error": "Failed to load round details."
+      },
+      "layout": "Scrollable view starting with metadata cards (Interviewer, Date, Link). Section below lists asked questions as cards with Difficulty and Category tags. Bottom sticky CTA to 'Log Question' or 'Submit Feedback'."
+    },
+    {
+      "name": "QuestionBank",
+      "purpose": "A categorized repository of all interview questions encountered.",
+      "states": {
+        "loading": "Skeleton list.",
+        "empty": "No questions logged. Start interviewing to build your bank!",
+        "error": "Failed to load questions."
+      },
+      "layout": "Top horizontal list of categories (Python, DSA, System Design, etc.) acting as filters. Below, a masonry or single-column list of question cards. Each card reveals difficulty badge, question snippet, and an expandable 'View Answer' area."
+    },
+    {
+      "name": "Profile",
+      "purpose": "Manage Google account integration, preferences, and data export.",
+      "states": {
+        "loading": "Loading profile data...",
+        "empty": "N/A",
+        "error": "Failed to load profile."
+      },
+      "layout": "Top cover banner using the abstract geometric background image with gradient scrim. Avatar overlaps the banner. List of settings rows below using 'brandTertiary'-tinted icon containers."
+    }
+  ],
+  "images": {
+    "google_logo": {
+      "url": "https://images.unsplash.com/photo-1678483790053-71367bc7a02c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHwxfHxnb29nbGUlMjBsb2dvJTIwdHJhbnNwYXJlbnR8ZW58MHx8fHwxNzkzNjc3ODQxfDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Google Logo transparent"
+    },
+    "profile_banner": {
+      "url": "https://images.unsplash.com/photo-1648878136531-15e7d3a88e76?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTV8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMGdyZWVuJTIwZ2VvbWV0cmljJTIwbWluaW1hbGlzdCUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzkzNzcwMDEzfDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Abstract green geometric minimalist background"
+    },
+    "empty_state_desk": {
+      "url": "https://images.unsplash.com/photo-1618254170747-35f7ba2f9a6e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwY2xlYW4lMjBkZXNrJTIwd29ya3NwYWNlfGVufDB8fHx8MTc5Mzc3MDAxM3ww&ixlib=rb-4.1.0&q=85",
+      "alt": "Minimalist clean desk workspace for empty state"
+    }
+  },
+  "haptics": {
+    "events": {
+      "primary_button_press": "light",
+      "tab_change": "light",
+      "status_update_success": "success",
+      "filter_chip_toggle": "selection",
+      "error_state_trigger": "error"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the '1 iOS-Native Clean' personality guidelines. Use the 8pt spacing grid and ensure components breathe.",
+    "BANNED: Do not use any blues, purples, indigos, or navys anywhere in the app per strict <Colors> rules. The primary brand color is Forest Green (#2E523A) combined with Coral (#E27357) for accents. Even though the user mentioned 'navy+amber' as an option, they also mentioned 'forest+coral', which safely complies with the rule.",
+    "Implement light and dark mode comprehensively via context/hooks, utilizing the provided 'dark' and 'light' color objects.",
+    "For the Timeline in ApplicationDetail: Ensure vertical lines connect the steps accurately. Use icons mapped to 'Interview Round' status inside small circular containers overlaying the line.",
+    "Use react-native-gifted-charts for the Dashboard. Keep chart colors aligned with the semantic brand and status colors (e.g., green for offers, red for rejections, brand for active).",
+    "For images with overlaid text (e.g., Profile Banner), apply the mandatory 3-stop vertical gradient scrim (transparent to surfaceInverse) to guarantee WCAG contrast.",
+    "Use Phosphor icons. Keep weights consistent across the app (e.g., Regular weight everywhere, except filled states for active bottom tabs).",
+    "Add empty state full-screen views (flex: 1, centered) for Dashboard, Lists, and Timelines, using the provided 'empty_state_desk' image where appropriate."
+  ]
+}
