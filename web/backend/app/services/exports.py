@@ -16,6 +16,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas as rl_canvas
 from reportlab.platypus import Image as RLImage
 from reportlab.platypus import KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
@@ -35,7 +36,7 @@ SHEETS = {
     "Applications": [
         ("Application_ID", "application_id"), ("Company_Name", "company_name"), ("Company_Website", "company_website"),
         ("Job_Role", "job_role"), ("Job_Description", "job_description"), ("Job_Location", "job_location"),
-        ("Job_Type", "job_type"), ("Applied_Date", "applied_date"), ("Job_Source", "job_source"),
+        ("Job_Type", "job_type"), ("Employment_Type", "employment_type"), ("Applied_Date", "applied_date"), ("Job_Source", "job_source"),
         ("Recruiter_Name", "recruiter_name"), ("Recruiter_Email", "recruiter_email"), ("Recruiter_Phone", "recruiter_phone"),
         ("Expected_CTC", "expected_ctc"), ("Offered_CTC", "offered_ctc"), ("Notice_Period", "notice_period"),
         ("Application_Status", "application_status"), ("Created_At", "created_at"), ("Updated_At", "updated_at"),
@@ -76,12 +77,19 @@ def _cell(v):
     return v
 
 
+_FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+
+
 def _xl(v):
-    """Spreadsheet-safe value: no control chars, no formula execution."""
-    v = _cell(v)
-    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r"):
-        return "'" + v
-    return v
+    """Spreadsheet value without control chars. Formula-looking text is handled by _as_text in build_xlsx."""
+    return _cell(v)
+
+
+def _as_text(cell) -> None:
+    """Store formula-looking text (e.g. "+91 ...", "=cmd") as literal text: shown verbatim, never evaluated."""
+    if isinstance(cell.value, str) and cell.value[:1] in _FORMULA_START:
+        cell.data_type = "s"
+        cell.quotePrefix = True
 
 
 def safe_name(s: str) -> str:
@@ -104,7 +112,10 @@ def build_xlsx(data: dict) -> bytes:
             cell.alignment = Alignment(vertical="center")
         for d in data[title]:
             ws.append([_xl(d.get(k)) for _, k in cols])
+            for cell in ws[ws.max_row]:
+                _as_text(cell)
         ws.freeze_panes = "A2"
+        ws.auto_filter.ref = ws.dimensions
         for i, (h, k) in enumerate(cols, start=1):
             longest = max([len(h)] + [len(str(_cell(d.get(k)))) for d in data[title][:200]])
             ws.column_dimensions[ws.cell(1, i).column_letter].width = min(60, max(12, longest + 2))
@@ -156,12 +167,55 @@ def _image_flowable(content: bytes, max_w: float, max_h: float):
     return RLImage(buf, width=w * scale, height=h * scale)
 
 
+def _embeddable(att: dict) -> bool:
+    ft = (att.get("file_type") or "").lower()
+    return ft.startswith("image/") or ft == "application/pdf" or (att.get("file_name") or "").lower().endswith(".pdf")
+
+
+def _size(n) -> str:
+    n = int(n or 0)
+    return f"{n / 1048576:.1f} MB" if n >= 1048576 else f"{max(1, round(n / 1024))} KB"
+
+
 def _footer(canvas, doc):
     canvas.saveState()
     canvas.setFont("Vera", 8)
     canvas.setFillColor(MUTED)
     canvas.drawString(18 * mm, 10 * mm, "HireLog report")
     canvas.restoreState()
+
+
+def _stat_strip(items: list, width: float, small: bool = False) -> Table:
+    """Compact row of figure tiles (value over label), wrapping to a new row after five."""
+    per_row = 5
+    value_style = ParagraphStyle("statv", parent=ST["h1"], fontSize=12 if small else 16, leading=15 if small else 20, spaceAfter=0)
+    cells = [[Paragraph(escape(str(v)), value_style), P(k, "small")] for k, v in items] or [[P("—"), P("")]]
+    rows = [cells[i:i + per_row] for i in range(0, len(cells), per_row)]
+    rows[-1] += [""] * (per_row - len(rows[-1]))
+    t = Table(rows, colWidths=[width / per_row] * per_row)
+    style = [("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 8),
+             ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]
+    for ri, row in enumerate(rows):
+        for ci, cell in enumerate(row):
+            if cell != "":
+                style += [("BACKGROUND", (ci, ri), (ci, ri), TINT), ("LINEAFTER", (ci, ri), (ci, ri), 3, colors.white),
+                          ("LINEBELOW", (ci, ri), (ci, ri), 3, colors.white)]
+    t.setStyle(TableStyle(style))
+    return t
+
+
+def _number_pages(writer: PdfWriter) -> None:
+    """Stamp "Page X of Y" on every page; the report is stitched from several renders, so this runs at the end."""
+    total = len(writer.pages)
+    for i, page in enumerate(writer.pages, 1):
+        w, h = float(page.mediabox.width), float(page.mediabox.height)
+        buf = io.BytesIO()
+        c = rl_canvas.Canvas(buf, pagesize=(w, h))
+        c.setFont("Helvetica", 8)  # built-in font: nothing embedded per page
+        c.setFillColor(MUTED)
+        c.drawRightString(w - 18 * mm, 10 * mm, f"Page {i} of {total}")
+        c.save()
+        page.merge_page(PdfReader(io.BytesIO(buf.getvalue())).pages[0])
 
 
 def _render(story: list) -> bytes:
@@ -182,45 +236,49 @@ def build_pdf(user: dict, apps: list, rounds: list, questions: list, attachments
         for page in PdfReader(io.BytesIO(pdf_bytes)).pages:
             writer.add_page(page)
 
-    # Cover / summary
-    status_counts: dict = {}
-    for a in apps:
-        status_counts[a.get("application_status", "")] = status_counts.get(a.get("application_status", ""), 0) + 1
-    cover = [
-        P("HireLog", "title"),
-        P(
-            f"{apps[0].get('company_name')} interview experience — {apps[0].get('job_role', '')}" if single
-            else f"Job-search report for {user.get('name') or user.get('email')}",
-            "sub",
-        ),
-        P(f"Generated {datetime.now(timezone.utc).strftime('%d %b %Y, %H:%M UTC')}", "small"),
-        Spacer(1, 10 * mm),
-        _kv_table([
-            ("Applications", len(apps)),
-            ("Interview rounds", len(rounds)),
-            ("Questions logged", len(questions)),
-            ("Attachments", len(attachments)),
-        ] + [(s, n) for s, n in sorted(status_counts.items(), key=lambda x: -x[1]) if s], width),
-        Spacer(1, 8 * mm),
-        P("Applications", "h2"),
-    ]
-    idx_rows = [[P("Company", "label"), P("Role", "label"), P("Status", "label"), P("Applied", "label")]]
-    for a in apps:
-        idx_rows.append([P(a.get("company_name")), P(a.get("job_role")), P(a.get("application_status")), P(a.get("applied_date"))])
-    t = Table(idx_rows, colWidths=[width * 0.28, width * 0.36, width * 0.2, width * 0.16], repeatRows=1)
-    t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), TINT), ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                           ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#E2E8F0"))]))
-    cover.append(t)
-    add(_render(cover))
+    generated = P(f"Generated {datetime.now(timezone.utc).strftime('%d %b %Y, %H:%M UTC')}", "small")
+    passed = sum(1 for r in rounds if r.get("interview_result") == "Passed")
+    stats = [("Interview rounds", len(rounds)), ("Rounds passed", passed), ("Questions", len(questions)), ("Attachments", len(attachments))]
+    if not single:
+        stats.insert(0, ("Applications", len(apps)))
+
+    if single:
+        # One application: brand line + stats, then straight into the details on the same page.
+        header = [P("HireLog · interview experience", "label"), generated, Spacer(1, 3 * mm), _stat_strip(stats, width), Spacer(1, 6 * mm)]
+    else:
+        status_counts: dict = {}
+        for a in apps:
+            status_counts[a.get("application_status", "")] = status_counts.get(a.get("application_status", ""), 0) + 1
+        cover = [
+            P("HireLog", "title"),
+            P(f"Job-search report for {user.get('name') or user.get('email')}", "sub"),
+            generated,
+            Spacer(1, 8 * mm),
+            _stat_strip(stats, width),
+            Spacer(1, 6 * mm),
+            P("By status", "h2"),
+            _stat_strip([(st, n) for st, n in sorted(status_counts.items(), key=lambda x: -x[1]) if st], width, small=True),
+            Spacer(1, 6 * mm),
+            P("Applications", "h2"),
+        ]
+        idx_rows = [[P("Company", "label"), P("Role", "label"), P("Status", "label"), P("Applied", "label")]]
+        for a in apps:
+            idx_rows.append([P(a.get("company_name")), P(a.get("job_role")), P(a.get("application_status")), P(a.get("applied_date"))])
+        t = Table(idx_rows, colWidths=[width * 0.28, width * 0.36, width * 0.2, width * 0.16], repeatRows=1)
+        t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), TINT), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                               ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#E2E8F0"))]))
+        cover += [t, Spacer(1, 10 * mm)]
+        header = cover  # the first application continues on the cover page instead of leaving it half empty
 
     for a in apps:
         aid = a["application_id"]
-        story = [
+        story = header + [
             P(a.get("company_name"), "h1"),
             P(f"{a.get('job_role', '')}  ·  {a.get('application_status', '')}", "sub"),
             Spacer(1, 4 * mm),
             _kv_table([
-                ("Location", a.get("job_location")), ("Job type", a.get("job_type")), ("Source", a.get("job_source")),
+                ("Location", a.get("job_location")), ("Job type", a.get("job_type")),
+                ("Employment", a.get("employment_type")), ("Source", a.get("job_source")),
                 ("Applied on", a.get("applied_date")), ("Website", a.get("company_website")),
                 ("Recruiter", a.get("recruiter_name")), ("Recruiter email", a.get("recruiter_email")),
                 ("Recruiter phone", a.get("recruiter_phone")), ("Expected CTC", a.get("expected_ctc")),
@@ -228,6 +286,7 @@ def build_pdf(user: dict, apps: list, rounds: list, questions: list, attachments
                 ("Description", a.get("job_description")),
             ], width),
         ]
+        header = []
         appended_pdfs: list = []
         app_rounds = sorted([r for r in rounds if r.get("application_id") == aid], key=lambda r: r.get("round_number") or 0)
         if not app_rounds:
@@ -253,19 +312,22 @@ def build_pdf(user: dict, apps: list, rounds: list, questions: list, attachments
                 story.append(P(f"Questions ({len(rq)})", "label"))
                 for i, q in enumerate(rq, 1):
                     block = [P(f"Q{i}. {q.get('question', '')}", "q"),
-                             P(f"{q.get('category', '')} · {q.get('difficulty', '')}", "small")]
+                             P(" · ".join(x for x in [q.get("category"), q.get("difficulty"), ", ".join(q.get("tags") or [])] if x), "small")]
                     if q.get("answer"):
                         block.append(P(q["answer"]))
                     if q.get("notes"):
                         block.append(P(f"Notes: {q['notes']}", "small"))
                     block.append(Spacer(1, 2 * mm))
                     story.append(KeepTogether(block))
-            for att in [x for x in attachments if x.get("round_id") == rid]:
+            round_atts = [x for x in attachments if x.get("round_id") == rid]
+            others = [x for x in round_atts if not _embeddable(x)]
+            if others:
+                story += [Spacer(1, 2 * mm), P(f"Other files ({len(others)})", "label")]
+                story += [P(f"• {x.get('file_name') or 'attachment'}  ({_size(x.get('size'))})", "small") for x in others]
+            for att in [x for x in round_atts if _embeddable(x)]:
                 ft = (att.get("file_type") or "").lower()
                 name = att.get("file_name") or "attachment"
                 is_pdf = ft == "application/pdf" or name.lower().endswith(".pdf")
-                if not (ft.startswith("image/") or is_pdf):
-                    continue  # only images and PDFs go into the report
                 try:
                     content = fetch(att["storage_key"])
                 except Exception as exc:
@@ -291,6 +353,7 @@ def build_pdf(user: dict, apps: list, rounds: list, questions: list, attachments
             except Exception as exc:
                 logger.warning("append pdf failed: %s", exc)
 
+    _number_pages(writer)
     out = io.BytesIO()
     writer.write(out)
     return out.getvalue()

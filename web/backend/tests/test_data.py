@@ -196,7 +196,8 @@ async def test_dashboard_and_exports(client):
     from openpyxl import load_workbook
 
     wb = load_workbook(io.BytesIO(sheet.content))
-    assert wb["Interview_Questions"]["D2"].value == "'=1+1"  # formula injection neutralised
+    cell = wb["Interview_Questions"]["D2"]
+    assert cell.value == "=1+1" and cell.data_type == "s" and cell.quotePrefix  # stored as text, never evaluated
 
     pdf = await client.get("/api/export/pdf", params={"application_id": a["application_id"]})
     assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
