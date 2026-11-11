@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
 from ..config import get_settings
-from ..deps import DB, client_ip
+from ..deps import DB, CurrentUser
 from ..models import DownloadEvent
 from ..security import limiter
 
@@ -73,13 +73,13 @@ def _file_name(version: str) -> str:
     return f"HireLog-{v}.apk" if v else "HireLog.apk"
 
 
-async def _count_download(db, version: str) -> None:
-    db.add(DownloadEvent(platform="android", version=version[:40]))
+async def _count_download(db, user, version: str) -> None:
+    db.add(DownloadEvent(user_id=user.user_id, platform="android", version=version[:40]))
     await db.commit()
 
 
 @router.get("/android", response_model=AndroidOut)
-async def android_info() -> AndroidOut:
+async def android_info(user: CurrentUser) -> AndroidOut:
     s = get_settings()
     base = {"version": s.android_version, "min_android": s.android_min_version, "shared_account": s.android_shared_account}
     if s.android_apk_url:
@@ -95,14 +95,14 @@ async def android_info() -> AndroidOut:
 
 
 @router.get("/android/{name}", include_in_schema=False)
-async def android_apk(name: str, request: Request, db: DB):
+async def android_apk(name: str, request: Request, user: CurrentUser, db: DB):
     s = get_settings()
-    if not limiter.allow(f"apk:{client_ip(request)}", 20, 3600):
+    if not limiter.allow(f"apk:{user.user_id}", 20, 3600):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "too_many_requests")
     if s.android_apk_url:
         if name != "external":
             raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
-        await _count_download(db, s.android_version)
+        await _count_download(db, user, s.android_version)
         return RedirectResponse(s.android_apk_url, status_code=302)
     info = await run_in_threadpool(_inspect, s.android_apk_path)
     if not info or name != _file_name(s.android_version):
@@ -110,7 +110,7 @@ async def android_apk(name: str, request: Request, db: DB):
     # Resumed downloads send Range: bytes=N- ; only count requests that start at the beginning.
     rng = request.headers.get("range", "")
     if not rng or rng.replace(" ", "").startswith("bytes=0-"):
-        await _count_download(db, s.android_version)
+        await _count_download(db, user, s.android_version)
     return FileResponse(
         s.android_apk_path,
         media_type=APK_MIME,

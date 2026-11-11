@@ -151,6 +151,7 @@ export type AdminOverview = {
   interview_results: AdminCount[];
   downloads_total: number;
   downloads_window: number;
+  downloaders: number;
   unread_messages: number;
   series: AdminDayPoint[];
 };
@@ -171,6 +172,8 @@ export type AdminUser = {
   questions: number;
   attachments: number;
   storage_bytes: number;
+  apk_downloads: number;
+  last_download_at?: string | null;
 };
 
 export type AdminUserDetail = AdminUser & { offers: number; active_sessions: number; active_days_30: number };

@@ -130,14 +130,21 @@ async def test_overview_and_downloads(admin, member, anon):
         z.writestr("AndroidManifest.xml", b"m")
     apk.parent.mkdir(parents=True, exist_ok=True)
     apk.write_bytes(buf.getvalue())
-    url = (await anon.get("/api/downloads/android")).json()["url"]
-    before = (await admin.get("/api/admin/overview")).json()["downloads_total"]
-    await anon.get(url)
-    await anon.get(url, headers={"Range": "bytes=10-"})
+    url = (await member.get("/api/downloads/android")).json()["url"]
+    before = (await admin.get("/api/admin/overview")).json()
+    await member.get(url)
+    await member.get(url)
+    await member.get(url, headers={"Range": "bytes=10-"})
     apk.unlink()
 
     o = (await admin.get("/api/admin/overview", params={"days": 7})).json()
-    assert o["downloads_total"] == before + 1
+    assert o["downloads_total"] == before["downloads_total"] + 2
+    assert o["downloaders"] == before["downloaders"] + 1
+
+    page = (await admin.get("/api/admin/users", params={"filter": "downloaded", "sort": "download_desc"})).json()
+    row = next(u for u in page["items"] if u["user_id"] == member.me["user_id"])
+    assert row["apk_downloads"] == 2 and row["last_download_at"]
+    assert all(u["apk_downloads"] > 0 for u in page["items"])
     assert len(o["series"]) == 7 and o["series"][-1]["signups"] >= 2 and o["series"][-1]["active"] >= 2
     assert o["users_total"] >= 2 and o["admins"] >= 1 and o["dau"] >= 2
     assert o["offers"] >= 1 and any(c["label"] == "Offer Received" for c in o["status_distribution"])

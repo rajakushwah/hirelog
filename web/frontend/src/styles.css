@@ -1246,13 +1246,28 @@ textarea.input {
 }
 
 .toggle {
+  appearance: none;
+  -webkit-appearance: none;
   position: relative;
   width: 48px;
   height: 28px;
+  margin: 0;
   flex-shrink: 0;
+  border: 0;
   border-radius: 14px;
   background: var(--border-strong);
+  cursor: pointer;
   transition: background 0.15s;
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+.toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .toggle::after {
@@ -1267,10 +1282,12 @@ textarea.input {
   transition: transform 0.15s;
 }
 
+.toggle:checked,
 .toggle.on {
   background: var(--brand-primary);
 }
 
+.toggle:checked::after,
 .toggle.on::after {
   transform: translateX(20px);
 }

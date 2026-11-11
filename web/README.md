@@ -90,7 +90,10 @@ The careers roles and About text in `frontend/src/pages/Landing.tsx` are placeho
 
 ## Android beta APK
 
-The home page has a "Downloads" section (Android APK + iOS "coming soon"). Until an APK is present the Android button shows "Coming soon".
+The app is for members only. The home page "Downloads" section asks visitors to sign up (or sign in); after signing in
+they land on **Get the app** (`/get-app`, also in the sidebar and Profile) with the Android APK and iOS "coming soon".
+Both `/api/downloads/android` and the APK itself require a signed-in session. Until an APK is present the Android button
+shows "Coming soon".
 
 1. Build a **signed release** APK (not the debug build), e.g. `eas build -p android --profile preview` in `../app/frontend`.
 2. Copy it to `backend/data/downloads/hirelog.apk` (Docker: `docker compose cp hirelog.apk app:/data/downloads/hirelog.apk`).
@@ -124,7 +127,9 @@ After that, admins can disable/enable accounts, sign a user out of every device,
 demoted before being disabled or deleted, and every action is written to the audit log. Disabled users are signed out
 immediately and get "This account has been disabled" on sign-in. To everyone else `/api/admin/*` returns 404.
 
-APK downloads are counted without storing IP addresses; resumed downloads (HTTP Range) aren't double-counted.
+Each app download is recorded against the signed-in user (no IP address or device details), so the overview shows how
+many users downloaded, and Users → "Downloaded app" lists who did and when. Resumed downloads (HTTP Range) aren't
+double-counted. If a user is deleted, their past downloads stay in the totals but are no longer linked to anyone.
 
 ## Configuration
 

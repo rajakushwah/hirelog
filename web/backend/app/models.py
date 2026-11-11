@@ -219,11 +219,12 @@ class ContactMessage(Base):
 
 
 class DownloadEvent(Base):
-    """A completed-or-started app download. No IP or user agent is kept."""
+    """A started app download by a signed-in user. No IP or user agent is kept."""
 
     __tablename__ = "download_events"
 
     event_id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("dl"))
+    user_id: Mapped[Optional[str]] = mapped_column(String(40), ForeignKey("users.user_id", ondelete="SET NULL"), index=True)
     platform: Mapped[str] = mapped_column(String(20))
     version: Mapped[str] = mapped_column(String(40), default="")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)

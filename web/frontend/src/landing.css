@@ -902,6 +902,25 @@
 }
 
 /* ---------- Downloads ---------- */
+.lp-dl-scope {
+  --lp-forest: #1f3a28;
+}
+
+.page > .lp-dl-scope {
+  margin-top: var(--lg);
+}
+
+.lp-dl-text.small {
+  font-size: var(--fs-sm);
+}
+
+.lp-dl-link {
+  color: #fff;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .lp-dl-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);

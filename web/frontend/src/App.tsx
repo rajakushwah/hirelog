@@ -1,5 +1,5 @@
 import { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { EmptyState, Spinner } from "./components/ui";
@@ -23,8 +23,23 @@ const AdminUsersPage = lazy(() => admin().then((m) => ({ default: m.AdminUsersPa
 const AdminUserPage = lazy(() => admin().then((m) => ({ default: m.AdminUserPage })));
 const AdminMessagesPage = lazy(() => admin().then((m) => ({ default: m.AdminMessagesPage })));
 const AdminAuditPage = lazy(() => admin().then((m) => ({ default: m.AdminAuditPage })));
+const GetApp = lazy(() => import("./pages/GetApp").then((m) => ({ default: m.GetApp })));
 const Search = lazy(() => import("./pages/Search").then((m) => ({ default: m.Search })));
 
+
+/** Only same-site paths are allowed as a post-login destination (no "//host" or "https://..."). */
+function safeNext(path: unknown): string {
+  return typeof path === "string" && path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\") ? path : "/";
+}
+
+function LoginRoute() {
+  const { user, loading } = useAuth();
+  const [params] = useSearchParams();
+  const loc = useLocation();
+  if (loading) return <Spinner full />;
+  if (user) return <Navigate to={safeNext(params.get("next") ?? (loc.state as { from?: string } | null)?.from)} replace />;
+  return <Login />;
+}
 
 function AdminOnly({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -66,12 +81,11 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 export function App() {
-  const { user, loading } = useAuth();
   return (
     <ErrorBoundary>
       <Suspense fallback={<Spinner full />}>
       <Routes>
-        <Route path="/login" element={loading ? <Spinner full /> : user ? <Navigate to="/" replace /> : <Login />} />
+        <Route path="/login" element={<LoginRoute />} />
         <Route
           element={
             <Protected>
@@ -89,6 +103,7 @@ export function App() {
           <Route path="rounds/new" element={<RoundForm />} />
           <Route path="rounds/:id" element={<RoundDetail />} />
           <Route path="rounds/:id/edit" element={<RoundForm />} />
+          <Route path="get-app" element={<GetApp />} />
           <Route path="admin" element={<AdminOnly><AdminOverviewPage /></AdminOnly>} />
           <Route path="admin/users" element={<AdminOnly><AdminUsersPage /></AdminOnly>} />
           <Route path="admin/users/:id" element={<AdminOnly><AdminUserPage /></AdminOnly>} />

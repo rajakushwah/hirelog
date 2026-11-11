@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { Spinner } from "./ui";
 import type { ComponentType } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Briefcase, CalendarBlank, House, MagnifyingGlass, Question, ShieldCheck, User, type IconProps } from "@phosphor-icons/react";
+import { Briefcase, CalendarBlank, DeviceMobile, House, MagnifyingGlass, Question, ShieldCheck, User, type IconProps } from "@phosphor-icons/react";
 import { useAuth } from "../auth";
 import { useInterviewReminders } from "../reminders";
 import { Logo } from "./Logo";
@@ -42,6 +42,14 @@ export function Layout() {
             <>
               <MagnifyingGlass size={22} weight={isActive ? "bold" : "regular"} />
               Search
+            </>
+          )}
+        </NavLink>
+        <NavLink to="/get-app" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
+          {({ isActive }) => (
+            <>
+              <DeviceMobile size={22} weight={isActive ? "fill" : "regular"} />
+              Get the app
             </>
           )}
         </NavLink>

@@ -1,6 +1,6 @@
 import { useDeferredValue, useState, type ReactNode } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { NavLink, useNavigate, useParams } from "react-router-dom";
+import { NavLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Area,
   Bar,
@@ -98,15 +98,16 @@ function AdminHead({ title, sub, unread }: { title: string; sub: string; unread?
   );
 }
 
-function Metric({ icon, label, value, hint }: { icon: ReactNode; label: string; value: ReactNode; hint?: string }) {
-  return (
-    <div className="stat">
+function Metric({ icon, label, value, hint, onClick }: { icon: ReactNode; label: string; value: ReactNode; hint?: string; onClick?: () => void }) {
+  const body = (
+    <>
       {icon}
       <span className="stat-value">{value}</span>
       <span className="stat-label">{label}</span>
       {hint ? <span className="small">{hint}</span> : null}
-    </div>
+    </>
   );
+  return onClick ? <button className="stat" onClick={onClick}>{body}</button> : <div className="stat">{body}</div>;
 }
 
 function useChartStyle() {
@@ -138,6 +139,7 @@ const RANGES = ["7 days", "30 days", "90 days", "1 year"] as const;
 const RANGE_DAYS: Record<(typeof RANGES)[number], number> = { "7 days": 7, "30 days": 30, "90 days": 90, "1 year": 365 };
 
 export function AdminOverviewPage() {
+  const nav = useNavigate();
   const [range, setRange] = useState<(typeof RANGES)[number]>("30 days");
   const days = RANGE_DAYS[range];
   const { data, isLoading, error } = useQuery({
@@ -179,7 +181,7 @@ export function AdminOverviewPage() {
             <Metric icon={<ListChecks size={22} weight="fill" color={colors.brandPrimary} />} label="Applications" value={data!.applications} hint={`${data!.rounds} interview rounds · ${data!.questions} questions`} />
             <Metric icon={<Trophy size={22} weight="fill" color={colors.success} />} label="Offers" value={data!.offers} hint={`${data!.rejections} rejections`} />
             <Metric icon={<HardDrives size={22} weight="fill" color={colors.warning} />} label="Attachment storage" value={formatBytes(data!.storage_bytes)} hint={`${data!.attachments} files`} />
-            <Metric icon={<AndroidLogo size={22} weight="fill" color={colors.info} />} label="APK downloads" value={data!.downloads_total} hint={`${data!.downloads_window} in the last ${range}`} />
+            <Metric icon={<AndroidLogo size={22} weight="fill" color={colors.info} />} label="App downloads" value={data!.downloads_total} hint={`by ${data!.downloaders} user${data!.downloaders === 1 ? "" : "s"} · ${data!.downloads_window} in the last ${range}`} onClick={() => nav("/admin/users?filter=downloaded")} />
           </div>
 
           <div className="charts">
@@ -270,11 +272,12 @@ export function AdminOverviewPage() {
   );
 }
 
-const USER_FILTERS = ["All", "Active (30 days)", "Inactive", "Disabled", "Admins"] as const;
+const USER_FILTERS = ["All", "Active (30 days)", "Inactive", "Downloaded app", "Disabled", "Admins"] as const;
 const FILTER_PARAM: Record<(typeof USER_FILTERS)[number], string> = {
   All: "all",
   "Active (30 days)": "active",
   Inactive: "inactive",
+  "Downloaded app": "downloaded",
   Disabled: "disabled",
   Admins: "admins",
 };
@@ -283,8 +286,10 @@ export function AdminUsersPage() {
   const nav = useNavigate();
   const [q, setQ] = useState("");
   const query = useDeferredValue(q.trim());
-  const [filter, setFilter] = useState<(typeof USER_FILTERS)[number]>("All");
-  const [sort, setSort] = useState("created_desc");
+  const [params] = useSearchParams();
+  const initial = USER_FILTERS.find((f) => FILTER_PARAM[f] === params.get("filter")) ?? "All";
+  const [filter, setFilter] = useState<(typeof USER_FILTERS)[number]>(initial);
+  const [sort, setSort] = useState(initial === "Downloaded app" ? "download_desc" : "created_desc");
   const [page, setPage] = useState(0);
 
   const { data, isLoading, error } = useQuery({
@@ -310,6 +315,7 @@ export function AdminUsersPage() {
           <option value="created_desc">Newest</option>
           <option value="created_asc">Oldest</option>
           <option value="active_desc">Recently active</option>
+          <option value="download_desc">Recently downloaded app</option>
           <option value="name">Name</option>
         </select>
       </div>
@@ -336,6 +342,11 @@ export function AdminUsersPage() {
                   <span className="meta">
                     {u.applications} apps · {u.rounds} rounds · {u.questions} questions · {formatBytes(u.storage_bytes)}
                   </span>
+                  {u.apk_downloads ? (
+                    <span className="meta">
+                      <AndroidLogo size={13} weight="fill" /> Downloaded app {u.apk_downloads}× · last {ago(u.last_download_at)}
+                    </span>
+                  ) : null}
                 </span>
                 <UserBadges admin={u.is_admin} disabled={!!u.disabled_at} />
               </button>
@@ -443,6 +454,7 @@ export function AdminUserPage() {
         <KV label="Joined" value={dateTime(u.created_at)} />
         <KV label="Last sign-in" value={dateTime(u.last_login_at)} />
         <KV label="Last active" value={u.last_active_at ? `${ago(u.last_active_at)} (${dateTime(u.last_active_at)})` : "Never"} />
+        <KV label="Android app" value={u.apk_downloads ? `Downloaded ${u.apk_downloads}× · last ${dateTime(u.last_download_at)}` : "Not downloaded"} />
         <KV label="Sign-in methods" value={[u.has_password ? "Password" : "", u.google_linked ? "Google" : ""].filter(Boolean).join(", ") || "None"} />
         <KV label="Status" value={disabled ? `Disabled ${dateTime(u.disabled_at)}` : "Active"} />
         <KV label="User ID" value={u.user_id} />

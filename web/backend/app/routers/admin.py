@@ -69,6 +69,7 @@ class OverviewOut(BaseModel):
     interview_results: list[Count]
     downloads_total: int
     downloads_window: int
+    downloaders: int
     unread_messages: int
     series: list[DayPoint]
 
@@ -89,6 +90,8 @@ class AdminUserOut(BaseModel):
     questions: int = 0
     attachments: int = 0
     storage_bytes: int = 0
+    apk_downloads: int = 0
+    last_download_at: Optional[datetime] = None
 
 
 class AdminUserDetailOut(AdminUserOut):
@@ -176,32 +179,37 @@ def _counts_subqueries():
         select(Attachment.user_id.label("uid"), func.count().label("n"), func.coalesce(func.sum(Attachment.size), 0).label("bytes"))
         .group_by(Attachment.user_id).subquery()
     )
-    return apps, rounds, qs, atts
+    dls = (
+        select(DownloadEvent.user_id.label("uid"), func.count().label("n"), func.max(DownloadEvent.created_at).label("last"))
+        .where(DownloadEvent.user_id.is_not(None)).group_by(DownloadEvent.user_id).subquery()
+    )
+    return apps, rounds, qs, atts, dls
 
 
 def _user_query():
-    apps, rounds, qs, atts = _counts_subqueries()
+    apps, rounds, qs, atts, dls = _counts_subqueries()
     stmt = (
         select(
             User,
             func.coalesce(apps.c.n, 0), func.coalesce(rounds.c.n, 0), func.coalesce(qs.c.n, 0),
-            func.coalesce(atts.c.n, 0), func.coalesce(atts.c.bytes, 0),
+            func.coalesce(atts.c.n, 0), func.coalesce(atts.c.bytes, 0), func.coalesce(dls.c.n, 0), dls.c.last,
         )
         .outerjoin(apps, apps.c.uid == User.user_id)
         .outerjoin(rounds, rounds.c.uid == User.user_id)
         .outerjoin(qs, qs.c.uid == User.user_id)
         .outerjoin(atts, atts.c.uid == User.user_id)
+        .outerjoin(dls, dls.c.uid == User.user_id)
     )
-    return stmt
+    return stmt, dls
 
 
 def _user_out(row, cls=AdminUserOut, **extra):
-    u, a, r, q, at, b = row
+    u, a, r, q, at, b, dn, dl = row
     return cls(
         user_id=u.user_id, name=u.name, email=u.email, created_at=u.created_at, last_login_at=u.last_login_at,
         last_active_at=u.last_active_at, is_admin=u.is_admin, disabled_at=u.disabled_at, has_password=u.has_password,
         google_linked=u.google_sub is not None, applications=a, rounds=r, questions=q, attachments=at,
-        storage_bytes=int(b or 0), **extra,
+        storage_bytes=int(b or 0), apk_downloads=dn, last_download_at=dl, **extra,
     )
 
 
@@ -263,6 +271,7 @@ async def overview(admin: CurrentAdmin, db: DB, days: int = Query(30, ge=7, le=3
         interview_results=[Count(label=s or "Unknown", count=n) for s, n in result_rows],
         downloads_total=await _count(db, DownloadEvent),
         downloads_window=sum(dl_days.values()),
+        downloaders=int(await db.scalar(select(func.count(distinct(DownloadEvent.user_id)))) or 0),
         unread_messages=await _count(db, ContactMessage, ContactMessage.read_at.is_(None)),
         series=series,
     )
@@ -274,8 +283,8 @@ async def list_users(
     admin: CurrentAdmin,
     db: DB,
     q: str = Query("", max_length=200),
-    filter: Literal["all", "active", "inactive", "disabled", "admins"] = "all",
-    sort: Literal["created_desc", "created_asc", "active_desc", "name"] = "created_desc",
+    filter: Literal["all", "active", "inactive", "disabled", "admins", "downloaded"] = "all",
+    sort: Literal["created_desc", "created_asc", "active_desc", "download_desc", "name"] = "created_desc",
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> UserPage:
@@ -292,21 +301,26 @@ async def list_users(
         where.append(User.disabled_at.is_not(None))
     elif filter == "admins":
         where.append(User.is_admin.is_(True))
+    elif filter == "downloaded":
+        where.append(User.user_id.in_(select(DownloadEvent.user_id).where(DownloadEvent.user_id.is_not(None))))
 
     order = {
         "created_desc": [User.created_at.desc()],
         "created_asc": [User.created_at.asc()],
         "active_desc": [User.last_active_at.desc().nulls_last(), User.created_at.desc()],
         "name": [func.lower(User.name), User.email],
-    }[sort]
+    }
+    stmt, dls = _user_query()
+    order["download_desc"] = [dls.c.last.desc().nulls_last(), User.created_at.desc()]
     total = await _count(db, User, *where)
-    rows = (await db.execute(_user_query().where(*where).order_by(*order).limit(limit).offset(offset))).all()
+    rows = (await db.execute(stmt.where(*where).order_by(*order[sort]).limit(limit).offset(offset))).all()
     return UserPage(items=[_user_out(r) for r in rows], total=total)
 
 
 @router.get("/users/{user_id}", response_model=AdminUserDetailOut)
 async def user_detail(user_id: str, admin: CurrentAdmin, db: DB) -> AdminUserDetailOut:
-    row = (await db.execute(_user_query().where(User.user_id == user_id))).first()
+    stmt, _ = _user_query()
+    row = (await db.execute(stmt.where(User.user_id == user_id))).first()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
     now = utcnow()

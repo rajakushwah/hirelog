@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { AndroidLogo, Bell, Devices, DownloadSimple, Moon, ShieldCheck, SignOut, Trash } from "@phosphor-icons/react";
+import { Bell, DeviceMobile, Devices, DownloadSimple, Moon, ShieldCheck, SignOut, Trash } from "@phosphor-icons/react";
 import { useAuth } from "../auth";
-import { apkHref, useAndroidInfo } from "../components/AndroidDownload";
+import { GET_APP_PATH } from "../components/AndroidDownload";
 import { ExportCard } from "../components/Exports";
 import { ConfirmSheet, ErrorNote, Field } from "../components/ui";
 import { remindersSupported, useReminderSetting } from "../reminders";
 import { useTheme, type ThemePreference } from "../theme";
-import { formatBytes, formatDate } from "../util";
+import { formatDate } from "../util";
 
 const APPEARANCE: { value: ThemePreference; label: string }[] = [
   { value: "system", label: "System" },
@@ -19,7 +19,6 @@ export function Profile() {
   const { user, logout, deleteAccount } = useAuth();
   const { preference, setPreference } = useTheme();
   const [reminders, setReminders] = useReminderSetting();
-  const { data: android } = useAndroidInfo();
   const [sheet, setSheet] = useState<"logout" | "everywhere" | "delete" | null>(null);
   const [reminderMsg, setReminderMsg] = useState<string | null>(null);
   const [typed, setTyped] = useState("");
@@ -90,33 +89,17 @@ export function Profile() {
       <div className="section-head"><h2>Export your data</h2></div>
       <ExportCard />
 
-      {android?.available && apkHref(android.url) ? (
-        <>
-          <div className="section-head"><h2>Mobile app</h2></div>
-          <div className="settings-group">
-            <a
-              className="settings-row"
-              href={apkHref(android.url)}
-              {...(android.url.startsWith("/") ? { download: "" } : { target: "_blank", rel: "noopener noreferrer" })}
-            >
-              <span className="icon-box sm"><AndroidLogo size={20} weight="bold" /></span>
-              <span className="grow">
-                <strong>Get the Android app{android.version ? ` (v${android.version})` : ""}</strong>
-                <span className="small">
-                  Beta APK{android.size ? ` · ${formatBytes(android.size)}` : ""}. Not on the Play Store yet: allow &ldquo;Install unknown apps&rdquo; for your browser.
-                </span>
-                {!android.shared_account ? (
-                  <span className="small" style={{ color: "var(--warning)" }}>
-                    Separate beta account: data doesn&rsquo;t sync with the web app yet.
-                  </span>
-                ) : null}
-                {android.sha256 ? <span className="small" style={{ wordBreak: "break-all" }}>SHA-256: {android.sha256}</span> : null}
-              </span>
-              <DownloadSimple size={20} />
-            </a>
-          </div>
-        </>
-      ) : null}
+      <div className="section-head"><h2>Mobile app</h2></div>
+      <div className="settings-group">
+        <Link className="settings-row" to={GET_APP_PATH}>
+          <span className="icon-box sm"><DeviceMobile size={20} weight="bold" /></span>
+          <span className="grow">
+            <strong>Get the app</strong>
+            <span className="small">Android beta APK is available. iPhone app coming soon.</span>
+          </span>
+          <DownloadSimple size={20} />
+        </Link>
+      </div>
 
       {user?.is_admin ? (
         <>
