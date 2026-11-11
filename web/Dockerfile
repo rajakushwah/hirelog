@@ -22,7 +22,6 @@ COPY --from=frontend /src/dist /app/frontend/dist
 RUN useradd --system --uid 10001 --home /nonexistent hirelog \
  && mkdir -p /data/uploads /data/downloads && chown -R hirelog /data && chmod 700 /data
 USER hirelog
-VOLUME ["/data"]
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health')"
 # --proxy-headers so client IPs (rate limiting) come from the TLS proxy in front; single worker because the rate limiter is in-memory.
