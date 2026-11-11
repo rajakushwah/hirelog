@@ -56,12 +56,66 @@ const STEPS = [
 const PIPELINE = [
   { label: "Applied", tone: "info" },
   { label: "Recruiter Screening", tone: "warn" },
-  { label: "Interview In Progress", tone: "brand" },
+  { label: "Interview In Progress", tone: "progress" },
   { label: "Offer Received", tone: "coral" },
 ];
 
+const SHOWCASE = [
+  { company: "Amazon", role: "Software Development Engineer II", logo: "amazon" },
+  { company: "Microsoft", role: "Senior Software Engineer", logo: "microsoft" },
+  { company: "Cisco", role: "Network Software Engineer", logo: "cisco" },
+  { company: "NVIDIA", role: "GPU Software Engineer", logo: "nvidia" },
+  { company: "AMD", role: "Silicon Design Engineer", logo: "amd" },
+];
+
+/** Cycles through example companies; holds still for users who prefer reduced motion. */
+function PipelineShowcase() {
+  const [i, setI] = useState(0);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const t = window.setInterval(() => setI((n) => (n + 1) % SHOWCASE.length), 1500);
+    return () => window.clearInterval(t);
+  }, [paused]);
+  const c = SHOWCASE[i];
+
+  return (
+    <div
+      className="lp-pipeline"
+      aria-label="Example application moving through statuses"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      <div className="lp-pipe-head" key={c.company}>
+        <span className="lp-pipe-logo"><img src={`/landing/logos/${c.logo}.svg`} alt="" width={22} height={22} /></span>
+        <span><strong>{c.company}</strong><small>{c.role}</small></span>
+      </div>
+      {PIPELINE.map((p, n) => (
+        <div key={`${c.company}-${p.label}`} className="lp-pipe-row" style={{ animationDelay: `${n * 0.08}s` }}>
+          <span className={`lp-dot ${p.tone}`} />
+          <span className="grow">{p.label}</span>
+          {n < PIPELINE.length - 1 ? <CheckCircle size={18} weight="fill" className="lp-ok" /> : <Confetti size={18} weight="fill" className="lp-party" />}
+        </div>
+      ))}
+      <div className="lp-pipe-dots" role="tablist" aria-label="Example companies">
+        {SHOWCASE.map((s, n) => (
+          <button
+            key={s.company}
+            type="button"
+            role="tab"
+            aria-selected={n === i}
+            aria-label={s.company}
+            className={n === i ? "active" : ""}
+            onClick={() => setI(n)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const VALUES = [
-  { icon: LockKey, title: "Private by design", text: "Your data stays on your own server. No ads, no tracking, no selling." },
+  { icon: LockKey, title: "Private by design", text: "Your data is yours. No ads, no third-party trackers, never sold. Export or delete it anytime." },
   { icon: Leaf, title: "Calm, not chaotic", text: "Job hunting is stressful. The tool shouldn't be." },
   { icon: UsersThree, title: "Built with candidates", text: "Every feature started as a real candidate's request." },
 ];
@@ -133,7 +187,7 @@ export function Landing() {
               </div>
               <ul className="lp-ticks">
                 <li><CheckCircle size={18} weight="fill" /> Free forever for personal use</li>
-                <li><CheckCircle size={18} weight="fill" /> Your data on your own server</li>
+                <li><CheckCircle size={18} weight="fill" /> Private by default. No ads, no trackers</li>
               </ul>
             </div>
             <div className="lp-hero-art">
@@ -190,19 +244,7 @@ export function Landing() {
                 ))}
               </ol>
             </div>
-            <div className="lp-pipeline" aria-label="Example application moving through statuses">
-              <div className="lp-pipe-head">
-                <span className="lp-logo sm"><Briefcase size={16} weight="fill" /></span>
-                <span><strong>Acme Corp</strong><small>Senior Software Engineer</small></span>
-              </div>
-              {PIPELINE.map((p, i) => (
-                <div key={p.label} className="lp-pipe-row" style={{ animationDelay: `${i * 0.15}s` }}>
-                  <span className={`lp-dot ${p.tone}`} />
-                  <span className="grow">{p.label}</span>
-                  {i < PIPELINE.length - 1 ? <CheckCircle size={18} weight="fill" className="lp-ok" /> : <Confetti size={18} weight="fill" className="lp-party" />}
-                </div>
-              ))}
-            </div>
+            <PipelineShowcase />
           </div>
         </section>
 

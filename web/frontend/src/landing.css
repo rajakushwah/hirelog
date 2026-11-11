@@ -612,6 +612,45 @@
   gap: 12px;
   align-items: center;
   margin-bottom: 8px;
+  animation: lp-rise 0.5s ease both;
+}
+
+.lp-pipe-logo {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.lp-pipe-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.lp-pipe-dots button {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transition: width 0.2s, background 0.2s;
+}
+
+.lp-pipe-dots button.active {
+  width: 22px;
+  background: #fff;
+}
+
+.lp-pipe-dots button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 
 .lp-pipe-head .lp-logo {
@@ -656,6 +695,7 @@
 .lp-dot {
   width: 10px;
   height: 10px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: #cbd5e1;
 }
@@ -664,7 +704,7 @@
   background: #e2a03f;
 }
 
-.lp-dot.brand {
+.lp-dot.progress {
   background: #8fd1a8;
 }
 

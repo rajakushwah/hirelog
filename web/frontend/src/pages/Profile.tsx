@@ -139,7 +139,7 @@ export function Profile() {
           </span>
         </button>
       </div>
-      <p className="small" style={{ textAlign: "center", marginTop: 24 }}>HireLog · your data is stored on your own server.</p>
+      <p className="small" style={{ textAlign: "center", marginTop: 24 }}>HireLog · your data is private and never sold.</p>
 
       <ConfirmSheet
         open={sheet === "logout" || sheet === "everywhere"}
