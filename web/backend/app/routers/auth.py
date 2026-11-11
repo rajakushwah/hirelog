@@ -68,6 +68,10 @@ async def login(payload: LoginIn, request: Request, response: Response, db: DB) 
     if not user or not ok:
         log.info("auth.login_failed ip=%s", client_ip(request))
         raise HTTPException(status_code=401, detail="invalid_credentials")
+    if user.is_disabled:
+        # Only revealed after a correct password, so it can't be used to probe which emails exist.
+        log.info("auth.login_disabled user=%s", user.user_id)
+        raise HTTPException(status_code=403, detail="account_disabled")
     if needs_rehash(user.password_hash or ""):
         user.password_hash = await run_in_threadpool(hash_password, payload.password)
     await start_session(db, response, request, user)
@@ -196,6 +200,8 @@ async def google_callback(
             user = User(email=email, name=str(claims.get("name") or email)[:200])
             db.add(user)
         user.google_sub = sub
+    if user.is_disabled:
+        return _login_error("account_disabled")
     user.name = str(claims.get("name") or user.name)[:200]
     picture = str(claims.get("picture") or "")
     user.profile_image = picture[:1000] if picture.startswith("https://") else None

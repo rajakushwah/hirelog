@@ -132,6 +132,7 @@ class UserOut(Out):
     profile_image: Optional[str] = None
     created_at: datetime
     has_password: bool = False
+    is_admin: bool = False
 
 
 class AuthConfigOut(BaseModel):

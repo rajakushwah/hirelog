@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
 from fastapi import Depends, HTTPException, Request, Response
@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
 from .db import get_db
-from .models import User, UserSession, utcnow
+from .models import User, UserActivityDay, UserSession, utcnow
 from .security import hash_token, new_token, tokens_equal
 
 CSRF_HEADER = "X-CSRF-Token"
@@ -30,6 +30,16 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+async def record_activity(db: AsyncSession, user: User, now: datetime) -> None:
+    """Mark the user active now and today (one activity row per user per UTC day)."""
+    today = now.date()
+    last = user.last_active_at
+    if last is None or last.date() != today:
+        if await db.get(UserActivityDay, (user.user_id, today)) is None:
+            db.add(UserActivityDay(user_id=user.user_id, day=today))
+    user.last_active_at = now
+
+
 async def start_session(db: AsyncSession, response: Response, request: Request, user: User) -> None:
     """Issue a brand-new session (never reuse a pre-login id) and set the cookies."""
     s = get_settings()
@@ -38,6 +48,8 @@ async def start_session(db: AsyncSession, response: Response, request: Request, 
         await db.execute(delete(UserSession).where(UserSession.token_hash == hash_token(old)))
     token, csrf = new_token(), new_token()
     now = utcnow()
+    user.last_login_at = now
+    await record_activity(db, user, now)
     db.add(
         UserSession(
             token_hash=hash_token(token),
@@ -75,12 +87,13 @@ async def _load_session(request: Request, db: AsyncSession) -> Optional[UserSess
         return None
     now = utcnow()
     idle = timedelta(hours=get_settings().session_idle_hours)
-    if sess.expires_at <= now or now - sess.last_seen_at > idle:
+    if sess.expires_at <= now or now - sess.last_seen_at > idle or sess.user.is_disabled:
         await db.delete(sess)
         await db.commit()
         return None
     if now - sess.last_seen_at > _TOUCH_EVERY:
         sess.last_seen_at = now
+        await record_activity(db, sess.user, now)
         await db.commit()
     return sess
 
@@ -100,5 +113,13 @@ async def get_current_user(sess: Annotated[UserSession, Depends(get_current_sess
     return sess.user
 
 
+async def get_current_admin(user: Annotated[User, Depends(get_current_user)]) -> User:
+    # 404, not 403: the admin API doesn't reveal that it exists to non-admins.
+    if not user.is_admin:
+        raise HTTPException(status_code=404, detail="not_found")
+    return user
+
+
 CurrentSession = Annotated[UserSession, Depends(get_current_session)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
+CurrentAdmin = Annotated[User, Depends(get_current_admin)]

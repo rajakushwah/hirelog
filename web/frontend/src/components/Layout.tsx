@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { Spinner } from "./ui";
 import type { ComponentType } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Briefcase, CalendarBlank, House, MagnifyingGlass, Question, User, type IconProps } from "@phosphor-icons/react";
+import { Briefcase, CalendarBlank, House, MagnifyingGlass, Question, ShieldCheck, User, type IconProps } from "@phosphor-icons/react";
 import { useAuth } from "../auth";
 import { useInterviewReminders } from "../reminders";
 import { Logo } from "./Logo";
@@ -45,6 +45,16 @@ export function Layout() {
             </>
           )}
         </NavLink>
+        {user?.is_admin ? (
+          <NavLink to="/admin" className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}>
+            {({ isActive }) => (
+              <>
+                <ShieldCheck size={22} weight={isActive ? "fill" : "regular"} />
+                Admin
+              </>
+            )}
+          </NavLink>
+        ) : null}
         <div className="sidebar-footer">
           <NavLink to="/profile" className="nav-item">
             {user?.profile_image ? (

@@ -7,6 +7,7 @@ export type User = {
   profile_image?: string | null;
   created_at: string;
   has_password: boolean;
+  is_admin?: boolean;
 };
 
 export type Application = {
@@ -115,4 +116,83 @@ export type AndroidInfo = {
   updated_at?: string | null;
   url: string;
   shared_account: boolean;
+};
+
+export type AdminCount = { label: string; count: number };
+
+export type AdminDayPoint = {
+  date: string;
+  signups: number;
+  active: number;
+  applications: number;
+  rounds: number;
+  questions: number;
+  attachments: number;
+  downloads: number;
+};
+
+export type AdminOverview = {
+  days: number;
+  users_total: number;
+  users_new: number;
+  admins: number;
+  disabled: number;
+  dau: number;
+  wau: number;
+  mau: number;
+  applications: number;
+  rounds: number;
+  questions: number;
+  attachments: number;
+  storage_bytes: number;
+  offers: number;
+  rejections: number;
+  status_distribution: AdminCount[];
+  interview_results: AdminCount[];
+  downloads_total: number;
+  downloads_window: number;
+  unread_messages: number;
+  series: AdminDayPoint[];
+};
+
+export type AdminUser = {
+  user_id: string;
+  name: string;
+  email: string;
+  created_at: string;
+  last_login_at?: string | null;
+  last_active_at?: string | null;
+  is_admin: boolean;
+  disabled_at?: string | null;
+  has_password: boolean;
+  google_linked: boolean;
+  applications: number;
+  rounds: number;
+  questions: number;
+  attachments: number;
+  storage_bytes: number;
+};
+
+export type AdminUserDetail = AdminUser & { offers: number; active_sessions: number; active_days_30: number };
+
+export type AdminUserPage = { items: AdminUser[]; total: number };
+
+export type AdminMessage = {
+  message_id: string;
+  name: string;
+  email: string;
+  topic: string;
+  message: string;
+  created_at: string;
+  read_at?: string | null;
+};
+
+export type AdminAuditEntry = {
+  entry_id: string;
+  admin_email: string;
+  action: string;
+  target_user_id?: string | null;
+  target_email: string;
+  detail: string;
+  created_at: string;
 };

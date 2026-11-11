@@ -27,6 +27,11 @@ const MESSAGES: Record<string, string> = {
   not_found: "Not found. It may have been deleted.",
   application_not_found: "That application no longer exists.",
   round_not_found: "That interview round no longer exists.",
+  account_disabled: "This account has been disabled. Contact support if you think this is a mistake.",
+  cannot_target_self: "You can't do that to your own account.",
+  remove_admin_first: "Remove admin access before doing this.",
+  user_disabled: "Enable this account first.",
+  confirmation_mismatch: "The email you typed doesn't match this account.",
   internal_error: "Something went wrong on the server. Please try again.",
 };
 

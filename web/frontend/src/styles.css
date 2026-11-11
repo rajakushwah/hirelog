@@ -1516,3 +1516,55 @@ textarea.input {
 .logo-hero {
   filter: drop-shadow(0 14px 24px rgba(31, 58, 40, 0.35));
 }
+
+/* Admin portal */
+.admin-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--md);
+}
+
+.admin-page > .section-title {
+  margin-top: var(--md);
+}
+
+.admin-page > .charts {
+  margin-top: 0;
+}
+
+.admin-tab {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.admin-badge {
+  gap: var(--xs);
+  background: var(--surface-tertiary);
+  color: var(--brand-primary);
+}
+
+.admin-badge.danger {
+  color: var(--error);
+}
+
+.admin-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--sm);
+}
+
+.admin-pager {
+  justify-content: center;
+  gap: var(--lg);
+}
+
+.admin-msg.unread {
+  border-left: 4px solid var(--brand-primary);
+}
+
+.admin-msg-body {
+  margin: var(--sm) 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

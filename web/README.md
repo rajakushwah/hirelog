@@ -103,6 +103,29 @@ version. To host it elsewhere instead, set `HIRELOG_ANDROID_APK_URL` (https) and
 Verify the signing certificate before publishing:
 `apksigner verify --print-certs hirelog.apk` (it must be your release key, RSA 2048+ or EC P-256, SHA-256 digest).
 
+## Admin portal
+
+`/admin` (sidebar "Admin", or Profile → Admin portal on phones) shows user growth, daily/weekly/monthly active users,
+usage over time, application outcomes, APK downloads, attachment storage, the contact-form inbox and an audit log.
+Admins see account details and **counts only** — never anyone's companies, notes, questions or files.
+
+Admin rights can't be granted from the website by signing up; give the first one from the server:
+
+```bash
+cd backend
+.venv/bin/python -m app.cli make-admin you@example.com     # sign up on the website first
+.venv/bin/python -m app.cli list-admins
+.venv/bin/python -m app.cli remove-admin someone@example.com
+# Docker: docker compose exec app python -m app.cli make-admin you@example.com
+```
+
+After that, admins can disable/enable accounts, sign a user out of every device, delete a user and all their data
+(you must type their email), and grant/remove admin. Guardrails: you can't act on your own account, an admin must be
+demoted before being disabled or deleted, and every action is written to the audit log. Disabled users are signed out
+immediately and get "This account has been disabled" on sign-in. To everyone else `/api/admin/*` returns 404.
+
+APK downloads are counted without storing IP addresses; resumed downloads (HTTP Range) aren't double-counted.
+
 ## Configuration
 
 All settings are environment variables with the `HIRELOG_` prefix (see `backend/.env.example`):

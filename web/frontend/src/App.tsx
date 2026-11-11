@@ -17,8 +17,19 @@ const QuestionForm = lazy(() => import("./pages/QuestionForm").then((m) => ({ de
 const Questions = lazy(() => import("./pages/Questions").then((m) => ({ default: m.Questions })));
 const RoundDetail = lazy(() => import("./pages/RoundDetail").then((m) => ({ default: m.RoundDetail })));
 const RoundForm = lazy(() => import("./pages/RoundForm").then((m) => ({ default: m.RoundForm })));
+const admin = () => import("./pages/Admin");
+const AdminOverviewPage = lazy(() => admin().then((m) => ({ default: m.AdminOverviewPage })));
+const AdminUsersPage = lazy(() => admin().then((m) => ({ default: m.AdminUsersPage })));
+const AdminUserPage = lazy(() => admin().then((m) => ({ default: m.AdminUserPage })));
+const AdminMessagesPage = lazy(() => admin().then((m) => ({ default: m.AdminMessagesPage })));
+const AdminAuditPage = lazy(() => admin().then((m) => ({ default: m.AdminAuditPage })));
 const Search = lazy(() => import("./pages/Search").then((m) => ({ default: m.Search })));
 
+
+function AdminOnly({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  return user?.is_admin ? <>{children}</> : <Navigate to="/" replace />;
+}
 
 function Protected({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -78,6 +89,11 @@ export function App() {
           <Route path="rounds/new" element={<RoundForm />} />
           <Route path="rounds/:id" element={<RoundDetail />} />
           <Route path="rounds/:id/edit" element={<RoundForm />} />
+          <Route path="admin" element={<AdminOnly><AdminOverviewPage /></AdminOnly>} />
+          <Route path="admin/users" element={<AdminOnly><AdminUsersPage /></AdminOnly>} />
+          <Route path="admin/users/:id" element={<AdminOnly><AdminUserPage /></AdminOnly>} />
+          <Route path="admin/messages" element={<AdminOnly><AdminMessagesPage /></AdminOnly>} />
+          <Route path="admin/audit" element={<AdminOnly><AdminAuditPage /></AdminOnly>} />
           <Route path="questions" element={<Questions />} />
           <Route path="questions/new" element={<QuestionForm />} />
           <Route path="questions/:id/edit" element={<QuestionForm />} />

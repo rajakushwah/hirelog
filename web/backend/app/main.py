@@ -15,7 +15,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .config import BASE_DIR, get_settings
 from .db import dispose_engine
 from .middleware import BodySizeLimitMiddleware, OriginCheckMiddleware, SecurityHeadersMiddleware
-from .routers import applications, attachments, auth, contact, dashboard, downloads, exports, questions, rounds
+from .routers import admin, applications, attachments, auth, contact, dashboard, downloads, exports, questions, rounds
 from .storage import get_storage
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -78,7 +78,7 @@ def create_app() -> FastAPI:
     async def health() -> dict:
         return {"status": "ok"}
 
-    for r in (auth, applications, rounds, questions, attachments, dashboard, exports, contact, downloads):
+    for r in (auth, applications, rounds, questions, attachments, dashboard, exports, contact, downloads, admin):
         api.include_router(r.router)
     app.include_router(api)
 

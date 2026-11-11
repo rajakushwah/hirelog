@@ -8,11 +8,12 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
 from ..config import get_settings
-from ..deps import client_ip
+from ..deps import DB, client_ip
+from ..models import DownloadEvent
 from ..security import limiter
 
 APK_MIME = "application/vnd.android.package-archive"
@@ -72,12 +73,18 @@ def _file_name(version: str) -> str:
     return f"HireLog-{v}.apk" if v else "HireLog.apk"
 
 
+async def _count_download(db, version: str) -> None:
+    db.add(DownloadEvent(platform="android", version=version[:40]))
+    await db.commit()
+
+
 @router.get("/android", response_model=AndroidOut)
 async def android_info() -> AndroidOut:
     s = get_settings()
     base = {"version": s.android_version, "min_android": s.android_min_version, "shared_account": s.android_shared_account}
     if s.android_apk_url:
-        return AndroidOut(available=True, url=s.android_apk_url, sha256=s.android_apk_sha256, **base)
+        # Routed through our own endpoint so downloads are counted before redirecting to the external host.
+        return AndroidOut(available=True, url="/api/downloads/android/external", sha256=s.android_apk_sha256, **base)
     info = await run_in_threadpool(_inspect, s.android_apk_path)
     if not info:
         return AndroidOut(available=False, **base)
@@ -88,13 +95,22 @@ async def android_info() -> AndroidOut:
 
 
 @router.get("/android/{name}", include_in_schema=False)
-async def android_apk(name: str, request: Request) -> FileResponse:
+async def android_apk(name: str, request: Request, db: DB):
     s = get_settings()
     if not limiter.allow(f"apk:{client_ip(request)}", 20, 3600):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "too_many_requests")
+    if s.android_apk_url:
+        if name != "external":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
+        await _count_download(db, s.android_version)
+        return RedirectResponse(s.android_apk_url, status_code=302)
     info = await run_in_threadpool(_inspect, s.android_apk_path)
-    if not info or s.android_apk_url or name != _file_name(s.android_version):
+    if not info or name != _file_name(s.android_version):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
+    # Resumed downloads send Range: bytes=N- ; only count requests that start at the beginning.
+    rng = request.headers.get("range", "")
+    if not rng or rng.replace(" ", "").startswith("bytes=0-"):
+        await _count_download(db, s.android_version)
     return FileResponse(
         s.android_apk_path,
         media_type=APK_MIME,

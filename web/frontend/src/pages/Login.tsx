@@ -12,6 +12,7 @@ const OAUTH_ERRORS: Record<string, string> = {
   google_failed: "Google sign-in didn't complete. Please try again.",
   email_not_verified: "Your Google email isn't verified.",
   registration_disabled: "New sign-ups are turned off on this server.",
+  account_disabled: "This account has been disabled. Contact support if you think this is a mistake.",
 };
 
 export function Login() {

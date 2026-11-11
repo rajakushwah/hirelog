@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Optional
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, Index, Integer, MetaData, String, Text, TypeDecorator
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Index, Integer, MetaData, String, Text, TypeDecorator, false
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -55,11 +55,29 @@ class User(Base):
     password_hash: Mapped[Optional[str]] = mapped_column(String(255))
     google_sub: Mapped[Optional[str]] = mapped_column(String(255), unique=True)
     profile_image: Mapped[Optional[str]] = mapped_column(String(1000))
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
+    # Granted only from the server CLI (python -m app.cli) or by another admin; never self-service.
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    disabled_at: Mapped[Optional[datetime]] = mapped_column(UTCDateTime)
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(UTCDateTime)
+    last_active_at: Mapped[Optional[datetime]] = mapped_column(UTCDateTime, index=True)
 
     @property
     def has_password(self) -> bool:
         return self.password_hash is not None
+
+    @property
+    def is_disabled(self) -> bool:
+        return self.disabled_at is not None
+
+
+class UserActivityDay(Base):
+    """One row per user per UTC day with any authenticated activity. Powers DAU/WAU/MAU without tracking requests."""
+
+    __tablename__ = "user_activity_days"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True)
+    day: Mapped[date] = mapped_column(Date, primary_key=True, index=True)
 
 
 class UserSession(Base):
@@ -196,4 +214,31 @@ class ContactMessage(Base):
     email: Mapped[str] = mapped_column(String(320))
     topic: Mapped[str] = mapped_column(String(40))
     message: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
+    read_at: Mapped[Optional[datetime]] = mapped_column(UTCDateTime)
+
+
+class DownloadEvent(Base):
+    """A completed-or-started app download. No IP or user agent is kept."""
+
+    __tablename__ = "download_events"
+
+    event_id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("dl"))
+    platform: Mapped[str] = mapped_column(String(20))
+    version: Mapped[str] = mapped_column(String(40), default="")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
+
+
+class AdminAuditLog(Base):
+    """Append-only record of admin actions. Emails are copied so entries survive user deletion."""
+
+    __tablename__ = "admin_audit_log"
+
+    entry_id: Mapped[str] = mapped_column(String(40), primary_key=True, default=lambda: new_id("aud"))
+    admin_id: Mapped[Optional[str]] = mapped_column(String(40))
+    admin_email: Mapped[str] = mapped_column(String(320))
+    action: Mapped[str] = mapped_column(String(40))
+    target_user_id: Mapped[Optional[str]] = mapped_column(String(40))
+    target_email: Mapped[str] = mapped_column(String(320), default="")
+    detail: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { AndroidLogo, Bell, Devices, DownloadSimple, Moon, SignOut, Trash } from "@phosphor-icons/react";
+import { Link } from "react-router-dom";
+import { AndroidLogo, Bell, Devices, DownloadSimple, Moon, ShieldCheck, SignOut, Trash } from "@phosphor-icons/react";
 import { useAuth } from "../auth";
 import { apkHref, useAndroidInfo } from "../components/AndroidDownload";
 import { ExportCard } from "../components/Exports";
@@ -113,6 +114,21 @@ export function Profile() {
               </span>
               <DownloadSimple size={20} />
             </a>
+          </div>
+        </>
+      ) : null}
+
+      {user?.is_admin ? (
+        <>
+          <div className="section-head"><h2>Admin</h2></div>
+          <div className="settings-group">
+            <Link className="settings-row" to="/admin">
+              <span className="icon-box sm"><ShieldCheck size={20} weight="bold" /></span>
+              <span className="grow">
+                <strong>Admin portal</strong>
+                <span className="small">Users, analytics, contact messages and the audit log.</span>
+              </span>
+            </Link>
           </div>
         </>
       ) : null}
