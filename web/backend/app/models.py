@@ -218,6 +218,22 @@ class ContactMessage(Base):
     read_at: Mapped[Optional[datetime]] = mapped_column(UTCDateTime)
 
 
+APP_ACCESS_STATUSES = ("pending", "approved", "rejected")
+
+
+class AppAccess(Base):
+    """Admin approval for downloading the mobile app. One row per user; re-requesting resets it to pending."""
+
+    __tablename__ = "app_access"
+
+    user_id: Mapped[str] = mapped_column(String(40), ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    note: Mapped[str] = mapped_column(String(500), default="")
+    requested_at: Mapped[Optional[datetime]] = mapped_column(UTCDateTime, index=True)
+    decided_at: Mapped[Optional[datetime]] = mapped_column(UTCDateTime)
+    decided_by: Mapped[str] = mapped_column(String(320), default="")
+
+
 class DownloadEvent(Base):
     """A started app download by a signed-in user. No IP or user agent is kept."""
 

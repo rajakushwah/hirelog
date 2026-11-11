@@ -21,6 +21,7 @@ import {
   ArrowLeft,
   CaretLeft,
   CaretRight,
+  CheckCircle,
   ChartLine,
   Envelope,
   EnvelopeOpen,
@@ -32,6 +33,7 @@ import {
   SignOut,
   Trash,
   Trophy,
+  XCircle,
   UserCirclePlus,
   Users,
 } from "@phosphor-icons/react";
@@ -39,7 +41,7 @@ import { api } from "../api";
 import { ChipRow, ConfirmSheet, EmptyState, ErrorNote, Field, KV, Spinner } from "../components/ui";
 import { useBack } from "../nav";
 import { useTheme } from "../theme";
-import type { AdminAuditEntry, AdminMessage, AdminOverview, AdminUserDetail, AdminUserPage } from "../types";
+import type { AdminAccessRequest, AdminAuditEntry, AdminBadges, AdminMessage, AdminOverview, AdminUserDetail, AdminUserPage } from "../types";
 import { formatBytes } from "../util";
 
 const PAGE = 25;
@@ -65,11 +67,17 @@ function dayLabel(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function AdminNav({ unread }: { unread?: number }) {
+function useBadges() {
+  return useQuery({ queryKey: ["admin", "badges"], queryFn: () => api<AdminBadges>("/admin/badges"), staleTime: 30_000 });
+}
+
+function AdminNav() {
+  const { data: b } = useBadges();
   const tabs = [
     { to: "/admin", label: "Overview", end: true },
     { to: "/admin/users", label: "Users" },
-    { to: "/admin/messages", label: unread ? `Messages (${unread})` : "Messages" },
+    { to: "/admin/app-access", label: b?.pending_access ? `App access (${b.pending_access})` : "App access" },
+    { to: "/admin/messages", label: b?.unread_messages ? `Messages (${b.unread_messages})` : "Messages" },
     { to: "/admin/audit", label: "Audit log" },
   ];
   return (
@@ -83,7 +91,7 @@ function AdminNav({ unread }: { unread?: number }) {
   );
 }
 
-function AdminHead({ title, sub, unread }: { title: string; sub: string; unread?: number }) {
+function AdminHead({ title, sub }: { title: string; sub: string }) {
   return (
     <>
       <div className="page-head">
@@ -93,7 +101,7 @@ function AdminHead({ title, sub, unread }: { title: string; sub: string; unread?
         </div>
         <span className="badge admin-badge"><ShieldCheck size={16} weight="fill" /> Admin</span>
       </div>
-      <AdminNav unread={unread} />
+      <AdminNav />
     </>
   );
 }
@@ -159,7 +167,7 @@ export function AdminOverviewPage() {
 
   return (
     <div className="page admin-page">
-      <AdminHead title="Admin overview" sub="How HireLog is being used" unread={data?.unread_messages} />
+      <AdminHead title="Admin overview" sub="How HireLog is being used" />
       <ChipRow options={RANGES} value={range} onChange={setRange} label="Time range" />
 
       {isLoading ? (
@@ -375,6 +383,88 @@ function UserBadges({ admin, disabled }: { admin: boolean; disabled: boolean }) 
   );
 }
 
+const ACCESS_LABEL: Record<AdminUserDetail["app_access"], string> = {
+  none: "Not requested",
+  pending: "Waiting for approval",
+  approved: "Approved",
+  rejected: "Rejected",
+};
+
+function useAccessDecision() {
+  const qc = useQueryClient();
+  const { id = "" } = useParams();
+  return useMutation({
+    mutationFn: (d: "approve" | "reject" | { userId: string; decision: "approve" | "reject" }) => {
+      const [userId, decision] = typeof d === "string" ? [id, d] : [d.userId, d.decision];
+      return api(`/admin/app-access/${encodeURIComponent(userId)}/${decision}`, { method: "POST" });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin"] }),
+  });
+}
+
+const ACCESS_FILTERS = ["Pending", "Approved", "Rejected", "All"] as const;
+
+export function AdminAccessPage() {
+  const [filter, setFilter] = useState<(typeof ACCESS_FILTERS)[number]>("Pending");
+  const nav = useNavigate();
+  const decide = useAccessDecision();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin", "app-access", filter],
+    queryFn: () => api<AdminAccessRequest[]>(`/admin/app-access?filter=${filter.toLowerCase()}`),
+    placeholderData: keepPreviousData,
+  });
+
+  return (
+    <div className="page admin-page">
+      <AdminHead title="App access" sub="Approve who can download the Android beta" />
+      <ChipRow options={ACCESS_FILTERS} value={filter} onChange={setFilter} label="Filter requests" />
+      <ErrorNote error={decide.error} />
+      {isLoading ? (
+        <Spinner />
+      ) : error ? (
+        <ErrorNote error={error} />
+      ) : data!.length === 0 ? (
+        <EmptyState
+          title={filter === "Pending" ? "No pending requests" : "Nothing here yet"}
+          subtitle="Members request access from the Get the app page. New requests show up here."
+          icon={<AndroidLogo size={28} />}
+        />
+      ) : (
+        <div className="list">
+          {data!.map((r) => (
+            <div key={r.user_id} className="card admin-msg">
+              <div className="row">
+                <button className="grow admin-link" style={{ minWidth: 0 }} onClick={() => nav(`/admin/users/${r.user_id}`)}>
+                  <span className="company truncate">{r.name}</span>
+                  <span className="role truncate">{r.email}</span>
+                </button>
+                <span className={`badge admin-badge${r.status === "rejected" ? " danger" : ""}`}>{ACCESS_LABEL[r.status]}</span>
+              </div>
+              {r.note ? <p className="admin-msg-body">&ldquo;{r.note}&rdquo;</p> : null}
+              <div className="row">
+                <span className="meta grow">
+                  {r.requested_at ? `Requested ${ago(r.requested_at)}` : "Granted without a request"}
+                  {r.decided_at ? ` · ${r.status === "approved" ? "approved" : "rejected"} ${ago(r.decided_at)} by ${r.decided_by}` : ""}
+                </span>
+                {r.status !== "approved" ? (
+                  <button className="btn btn-primary sm" disabled={decide.isPending} onClick={() => decide.mutate({ userId: r.user_id, decision: "approve" })}>
+                    <CheckCircle size={16} weight="bold" /> Approve
+                  </button>
+                ) : null}
+                {r.status !== "rejected" ? (
+                  <button className="btn btn-secondary sm" disabled={decide.isPending} onClick={() => decide.mutate({ userId: r.user_id, decision: "reject" })}>
+                    <XCircle size={16} weight="bold" /> {r.status === "approved" ? "Revoke" : "Reject"}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 type Action = "disable" | "enable" | "signout" | "grant" | "revoke" | "delete";
 
 const ACTION_COPY: Record<Action, { title: string; message: string; label: string }> = {
@@ -417,6 +507,8 @@ export function AdminUserPage() {
     },
   });
 
+  const access = useAccessDecision();
+
   const open = (a: Action) => {
     run.reset();
     setConfirmEmail("");
@@ -454,6 +546,7 @@ export function AdminUserPage() {
         <KV label="Joined" value={dateTime(u.created_at)} />
         <KV label="Last sign-in" value={dateTime(u.last_login_at)} />
         <KV label="Last active" value={u.last_active_at ? `${ago(u.last_active_at)} (${dateTime(u.last_active_at)})` : "Never"} />
+        <KV label="App access" value={ACCESS_LABEL[u.app_access]} />
         <KV label="Android app" value={u.apk_downloads ? `Downloaded ${u.apk_downloads}× · last ${dateTime(u.last_download_at)}` : "Not downloaded"} />
         <KV label="Sign-in methods" value={[u.has_password ? "Password" : "", u.google_linked ? "Google" : ""].filter(Boolean).join(", ") || "None"} />
         <KV label="Status" value={disabled ? `Disabled ${dateTime(u.disabled_at)}` : "Active"} />
@@ -463,6 +556,7 @@ export function AdminUserPage() {
       <div className="card">
         <h2 className="card-title">Actions</h2>
         <p className="small" style={{ margin: "0 0 12px" }}>Every action is recorded in the audit log.</p>
+        <ErrorNote error={access.error} />
         <div className="admin-actions">
           {disabled ? (
             <button className="btn btn-tint" onClick={() => open("enable")}><UserCirclePlus size={18} weight="bold" /> Enable account</button>
@@ -475,6 +569,11 @@ export function AdminUserPage() {
           ) : (
             <button className="btn btn-tint" onClick={() => open("grant")} disabled={disabled}><ShieldCheck size={18} weight="bold" /> Make admin</button>
           )}
+          {u.app_access !== "approved" ? (
+            <button className="btn btn-tint" onClick={() => access.mutate("approve")} disabled={access.isPending}><CheckCircle size={18} weight="bold" /> Approve app access</button>
+          ) : !u.is_admin ? (
+            <button className="btn btn-tint" onClick={() => access.mutate("reject")} disabled={access.isPending}><XCircle size={18} weight="bold" /> Revoke app access</button>
+          ) : null}
           <button className="btn btn-danger" onClick={() => open("delete")}><Trash size={18} weight="bold" /> Delete user</button>
         </div>
       </div>
@@ -580,6 +679,9 @@ const ACTION_LABELS: Record<string, string> = {
   revoke_admin: "Removed admin",
   delete_user: "Deleted user",
   delete_message: "Deleted message",
+  approve_app_access: "Approved app access",
+  reject_app_access: "Rejected app access",
+  revoke_app_access: "Revoked app access",
 };
 
 export function AdminAuditPage() {

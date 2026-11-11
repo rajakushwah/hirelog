@@ -13,6 +13,7 @@ from ..config import get_settings
 from ..deps import DB, CurrentAdmin
 from ..models import (
     AdminAuditLog,
+    AppAccess,
     Application,
     Attachment,
     ContactMessage,
@@ -70,6 +71,7 @@ class OverviewOut(BaseModel):
     downloads_total: int
     downloads_window: int
     downloaders: int
+    pending_access: int
     unread_messages: int
     series: list[DayPoint]
 
@@ -94,7 +96,24 @@ class AdminUserOut(BaseModel):
     last_download_at: Optional[datetime] = None
 
 
+class AccessRequestOut(BaseModel):
+    user_id: str
+    name: str
+    email: str
+    status: str
+    note: str
+    requested_at: Optional[datetime] = None
+    decided_at: Optional[datetime] = None
+    decided_by: str = ""
+
+
+class BadgesOut(BaseModel):
+    unread_messages: int
+    pending_access: int
+
+
 class AdminUserDetailOut(AdminUserOut):
+    app_access: str = "none"
     offers: int = 0
     active_sessions: int = 0
     active_days_30: int = 0
@@ -272,8 +291,17 @@ async def overview(admin: CurrentAdmin, db: DB, days: int = Query(30, ge=7, le=3
         downloads_total=await _count(db, DownloadEvent),
         downloads_window=sum(dl_days.values()),
         downloaders=int(await db.scalar(select(func.count(distinct(DownloadEvent.user_id)))) or 0),
+        pending_access=await _count(db, AppAccess, AppAccess.status == "pending"),
         unread_messages=await _count(db, ContactMessage, ContactMessage.read_at.is_(None)),
         series=series,
+    )
+
+
+@router.get("/badges", response_model=BadgesOut)
+async def badges(admin: CurrentAdmin, db: DB) -> BadgesOut:
+    return BadgesOut(
+        unread_messages=await _count(db, ContactMessage, ContactMessage.read_at.is_(None)),
+        pending_access=await _count(db, AppAccess, AppAccess.status == "pending"),
     )
 
 
@@ -330,6 +358,7 @@ async def user_detail(user_id: str, admin: CurrentAdmin, db: DB) -> AdminUserDet
         active_sessions=await _count(db, UserSession, UserSession.user_id == user_id, UserSession.expires_at > now),
         active_days_30=await _count(db, UserActivityDay, UserActivityDay.user_id == user_id,
                                     UserActivityDay.day >= now.date() - timedelta(days=29)),
+        app_access="approved" if row[0].is_admin else (await db.scalar(select(AppAccess.status).where(AppAccess.user_id == user_id)) or "none"),
     )
 
 
@@ -439,3 +468,45 @@ async def delete_message(message_id: str, admin: CurrentAdmin, db: DB) -> Respon
 @router.get("/audit", response_model=list[AuditOut])
 async def audit_log(admin: CurrentAdmin, db: DB, limit: int = Query(100, ge=1, le=500)) -> list[AdminAuditLog]:
     return list(await db.scalars(select(AdminAuditLog).order_by(AdminAuditLog.created_at.desc()).limit(limit)))
+
+
+# ---------- Mobile app access ----------
+@router.get("/app-access", response_model=list[AccessRequestOut])
+async def list_app_access(
+    admin: CurrentAdmin, db: DB, filter: Literal["pending", "approved", "rejected", "all"] = "pending",
+) -> list[AccessRequestOut]:
+    stmt = select(AppAccess, User).join(User, User.user_id == AppAccess.user_id)
+    if filter != "all":
+        stmt = stmt.where(AppAccess.status == filter)
+    order = AppAccess.requested_at.asc() if filter == "pending" else AppAccess.requested_at.desc()
+    rows = (await db.execute(stmt.order_by(order).limit(500))).all()
+    return [
+        AccessRequestOut(user_id=u.user_id, name=u.name, email=u.email, status=a.status, note=a.note,
+                         requested_at=a.requested_at, decided_at=a.decided_at, decided_by=a.decided_by)
+        for a, u in rows
+    ]
+
+
+async def _decide(db: AsyncSession, admin: User, user_id: str, decision: str) -> None:
+    user = await _target(db, admin, user_id, allow_self=True)
+    row = await db.get(AppAccess, user.user_id)
+    previous = row.status if row else "none"
+    if row is None:
+        row = AppAccess(user_id=user.user_id, requested_at=None)
+        db.add(row)
+    row.status, row.decided_at, row.decided_by = decision, utcnow(), admin.email
+    action = "approve_app_access" if decision == "approved" else ("revoke_app_access" if previous == "approved" else "reject_app_access")
+    await _audit(db, admin, action, user)
+    await db.commit()
+
+
+@router.post("/app-access/{user_id}/approve", status_code=204)
+async def approve_app_access(user_id: str, admin: CurrentAdmin, db: DB) -> Response:
+    await _decide(db, admin, user_id, "approved")
+    return Response(status_code=204)
+
+
+@router.post("/app-access/{user_id}/reject", status_code=204)
+async def reject_app_access(user_id: str, admin: CurrentAdmin, db: DB) -> Response:
+    await _decide(db, admin, user_id, "rejected")
+    return Response(status_code=204)

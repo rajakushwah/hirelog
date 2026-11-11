@@ -95,7 +95,7 @@ export function Profile() {
           <span className="icon-box sm"><DeviceMobile size={20} weight="bold" /></span>
           <span className="grow">
             <strong>Get the app</strong>
-            <span className="small">Android beta APK is available. iPhone app coming soon.</span>
+            <span className="small">Request access to the Android beta. iPhone app coming soon.</span>
           </span>
           <DownloadSimple size={20} />
         </Link>

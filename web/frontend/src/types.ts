@@ -118,6 +118,28 @@ export type AndroidInfo = {
   shared_account: boolean;
 };
 
+export type AppAccessStatus = "none" | "pending" | "approved" | "rejected";
+
+export type AppAccess = {
+  status: AppAccessStatus;
+  note: string;
+  requested_at?: string | null;
+  decided_at?: string | null;
+};
+
+export type AdminAccessRequest = {
+  user_id: string;
+  name: string;
+  email: string;
+  status: Exclude<AppAccessStatus, "none">;
+  note: string;
+  requested_at?: string | null;
+  decided_at?: string | null;
+  decided_by: string;
+};
+
+export type AdminBadges = { unread_messages: number; pending_access: number };
+
 export type AdminCount = { label: string; count: number };
 
 export type AdminDayPoint = {
@@ -152,6 +174,7 @@ export type AdminOverview = {
   downloads_total: number;
   downloads_window: number;
   downloaders: number;
+  pending_access: number;
   unread_messages: number;
   series: AdminDayPoint[];
 };
@@ -176,7 +199,7 @@ export type AdminUser = {
   last_download_at?: string | null;
 };
 
-export type AdminUserDetail = AdminUser & { offers: number; active_sessions: number; active_days_30: number };
+export type AdminUserDetail = AdminUser & { offers: number; active_sessions: number; active_days_30: number; app_access: AppAccessStatus };
 
 export type AdminUserPage = { items: AdminUser[]; total: number };
 

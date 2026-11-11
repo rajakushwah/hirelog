@@ -92,8 +92,15 @@ The careers roles and About text in `frontend/src/pages/Landing.tsx` are placeho
 
 The app is for members only. The home page "Downloads" section asks visitors to sign up (or sign in); after signing in
 they land on **Get the app** (`/get-app`, also in the sidebar and Profile) with the Android APK and iOS "coming soon".
-Both `/api/downloads/android` and the APK itself require a signed-in session. Until an APK is present the Android button
-shows "Coming soon".
+
+The Android beta is **invite-only**: members click "Request access" (optional note), and an admin approves or rejects it
+under **Admin → App access** (or from the user's page). Only then does the download appear. Approval can be revoked at
+any time, admins always have access, and every decision is in the audit log. Both `/api/downloads/android` and the APK
+itself return 403 unless the signed-in user is approved, so the check can't be skipped from the browser.
+
+For approval to actually protect the file, serve the APK from this server (`HIRELOG_ANDROID_APK_PATH`, the default).
+With `HIRELOG_ANDROID_APK_URL` pointing at a public host (e.g. a GitHub Release on a public repo) anyone who has that
+link can still download it directly. Until an APK is present the Android button shows "Coming soon".
 
 1. Build a **signed release** APK (not the debug build), e.g. `eas build -p android --profile preview` in `../app/frontend`.
 2. Copy it to `backend/data/downloads/hirelog.apk` (Docker: `docker compose cp hirelog.apk app:/data/downloads/hirelog.apk`).

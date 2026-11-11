@@ -22,6 +22,7 @@ const AdminOverviewPage = lazy(() => admin().then((m) => ({ default: m.AdminOver
 const AdminUsersPage = lazy(() => admin().then((m) => ({ default: m.AdminUsersPage })));
 const AdminUserPage = lazy(() => admin().then((m) => ({ default: m.AdminUserPage })));
 const AdminMessagesPage = lazy(() => admin().then((m) => ({ default: m.AdminMessagesPage })));
+const AdminAccessPage = lazy(() => admin().then((m) => ({ default: m.AdminAccessPage })));
 const AdminAuditPage = lazy(() => admin().then((m) => ({ default: m.AdminAuditPage })));
 const GetApp = lazy(() => import("./pages/GetApp").then((m) => ({ default: m.GetApp })));
 const Search = lazy(() => import("./pages/Search").then((m) => ({ default: m.Search })));
@@ -107,6 +108,7 @@ export function App() {
           <Route path="admin" element={<AdminOnly><AdminOverviewPage /></AdminOnly>} />
           <Route path="admin/users" element={<AdminOnly><AdminUsersPage /></AdminOnly>} />
           <Route path="admin/users/:id" element={<AdminOnly><AdminUserPage /></AdminOnly>} />
+          <Route path="admin/app-access" element={<AdminOnly><AdminAccessPage /></AdminOnly>} />
           <Route path="admin/messages" element={<AdminOnly><AdminMessagesPage /></AdminOnly>} />
           <Route path="admin/audit" element={<AdminOnly><AdminAuditPage /></AdminOnly>} />
           <Route path="questions" element={<Questions />} />

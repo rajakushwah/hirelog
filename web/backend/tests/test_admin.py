@@ -130,6 +130,8 @@ async def test_overview_and_downloads(admin, member, anon):
         z.writestr("AndroidManifest.xml", b"m")
     apk.parent.mkdir(parents=True, exist_ok=True)
     apk.write_bytes(buf.getvalue())
+    assert (await member.get("/api/downloads/android")).status_code == 403
+    assert (await admin.post(f"/api/admin/app-access/{member.me['user_id']}/approve")).status_code == 204
     url = (await member.get("/api/downloads/android")).json()["url"]
     before = (await admin.get("/api/admin/overview")).json()
     await member.get(url)
@@ -158,3 +160,35 @@ async def test_contact_inbox(admin, anon):
     unread = (await admin.get("/api/admin/messages", params={"filter": "unread"})).json()
     assert all(m["message_id"] != msg["message_id"] for m in unread)
     assert (await admin.delete(f"/api/admin/messages/{msg['message_id']}")).status_code == 204
+
+
+async def test_app_access_approval(admin, member):
+    uid = member.me["user_id"]
+    for path in ("/api/admin/app-access", f"/api/admin/app-access/{uid}/approve"):
+        r = await (member.get(path) if path.endswith("access") else member.post(path))
+        assert r.status_code == 404
+
+    await member.post("/api/downloads/access", json={"note": "Pixel 8"})
+    assert (await admin.get("/api/admin/badges")).json()["pending_access"] >= 1
+    pending = (await admin.get("/api/admin/app-access")).json()
+    req = next(p for p in pending if p["user_id"] == uid)
+    assert req["note"] == "Pixel 8" and req["email"] == member.me["email"]
+    assert (await admin.get(f"/api/admin/users/{uid}")).json()["app_access"] == "pending"
+
+    assert (await admin.post(f"/api/admin/app-access/{uid}/approve")).status_code == 204
+    assert (await member.get("/api/downloads/access")).json()["status"] == "approved"
+    assert (await member.get("/api/downloads/android")).status_code == 200
+    approved = (await admin.get("/api/admin/app-access", params={"filter": "approved"})).json()
+    assert any(a["user_id"] == uid and a["decided_by"] == admin.me["email"] for a in approved)
+
+    assert (await admin.post(f"/api/admin/app-access/{uid}/reject")).status_code == 204
+    assert (await member.get("/api/downloads/android")).status_code == 403
+    assert (await member.get("/api/downloads/access")).json()["status"] == "rejected"
+    assert (await member.post("/api/downloads/access", json={})).json()["status"] == "pending"
+
+    actions = [e["action"] for e in (await admin.get("/api/admin/audit")).json() if e["target_email"] == member.me["email"]]
+    assert "approve_app_access" in actions and "revoke_app_access" in actions
+
+
+async def test_admins_always_have_app_access(admin):
+    assert (await admin.get("/api/downloads/access")).json()["status"] == "approved"

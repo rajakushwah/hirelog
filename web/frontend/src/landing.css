@@ -950,6 +950,56 @@
   margin-top: var(--lg);
 }
 
+.lp-access {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--md);
+  width: 100%;
+}
+
+.lp-access-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(226, 160, 63, 0.2);
+  border: 1px solid rgba(226, 160, 63, 0.55);
+  color: #f6d49a;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.lp-access-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  font-size: var(--fs-sm);
+  color: var(--lp-sage);
+}
+
+.lp-access-note textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+  resize: vertical;
+}
+
+.lp-access-note textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.lp-access-note textarea:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
 .lp-dl-text.small {
   font-size: var(--fs-sm);
 }

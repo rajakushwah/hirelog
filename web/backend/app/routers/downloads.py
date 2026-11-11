@@ -9,11 +9,12 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..config import get_settings
 from ..deps import DB, CurrentUser
-from ..models import DownloadEvent
+from ..models import AppAccess, DownloadEvent, User, utcnow
+from ..schemas import In
 from ..security import limiter
 
 APK_MIME = "application/vnd.android.package-archive"
@@ -30,6 +31,29 @@ class AndroidOut(BaseModel):
     updated_at: Optional[datetime] = None
     url: str = ""
     shared_account: bool = False
+
+
+class AccessOut(BaseModel):
+    status: str
+    note: str = ""
+    requested_at: Optional[datetime] = None
+    decided_at: Optional[datetime] = None
+
+
+class AccessRequestIn(In):
+    note: str = Field("", max_length=500)
+
+
+async def access_status(db, user: User) -> tuple[str, Optional[AppAccess]]:
+    row = await db.get(AppAccess, user.user_id)
+    if user.is_admin:
+        return "approved", row
+    return (row.status if row else "none"), row
+
+
+async def _require_access(db, user: User) -> None:
+    if (await access_status(db, user))[0] != "approved":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "app_access_required")
 
 
 @dataclass(frozen=True)
@@ -78,8 +102,33 @@ async def _count_download(db, user, version: str) -> None:
     await db.commit()
 
 
+@router.get("/access", response_model=AccessOut)
+async def get_access(user: CurrentUser, db: DB) -> AccessOut:
+    st, row = await access_status(db, user)
+    return AccessOut(status=st, note=row.note if row else "", requested_at=row.requested_at if row else None,
+                     decided_at=row.decided_at if row else None)
+
+
+@router.post("/access", response_model=AccessOut)
+async def request_access(payload: AccessRequestIn, user: CurrentUser, db: DB) -> AccessOut:
+    if not limiter.allow(f"app-access:{user.user_id}", 5, 3600):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "too_many_requests")
+    st, row = await access_status(db, user)
+    if st in ("approved", "pending"):
+        return await get_access(user, db)
+    if row is None:
+        row = AppAccess(user_id=user.user_id)
+        db.add(row)
+    row.status, row.note, row.requested_at = "pending", payload.note.strip(), utcnow()
+    row.decided_at, row.decided_by = None, ""
+    await db.commit()
+    log.info("app_access.requested user=%s", user.user_id)
+    return await get_access(user, db)
+
+
 @router.get("/android", response_model=AndroidOut)
-async def android_info(user: CurrentUser) -> AndroidOut:
+async def android_info(user: CurrentUser, db: DB) -> AndroidOut:
+    await _require_access(db, user)
     s = get_settings()
     base = {"version": s.android_version, "min_android": s.android_min_version, "shared_account": s.android_shared_account}
     if s.android_apk_url:
@@ -99,6 +148,7 @@ async def android_apk(name: str, request: Request, user: CurrentUser, db: DB):
     s = get_settings()
     if not limiter.allow(f"apk:{user.user_id}", 20, 3600):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "too_many_requests")
+    await _require_access(db, user)
     if s.android_apk_url:
         if name != "external":
             raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")

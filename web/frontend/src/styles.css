@@ -1571,6 +1571,17 @@ textarea.input {
   gap: var(--sm);
 }
 
+.admin-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
 .admin-pager {
   justify-content: center;
   gap: var(--lg);

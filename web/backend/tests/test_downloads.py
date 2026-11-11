@@ -4,6 +4,8 @@ import os
 import zipfile
 
 from app.config import get_settings
+from app.db import get_sessionmaker
+from app.models import AppAccess
 
 APK = get_settings().android_apk_path
 
@@ -19,6 +21,13 @@ def _write(files: dict[str, bytes]) -> bytes:
     return buf.getvalue()
 
 
+async def _approve(client) -> None:
+    uid = (await client.get("/api/auth/me")).json()["user_id"]
+    async with get_sessionmaker()() as db:
+        await db.merge(AppAccess(user_id=uid, status="approved"))
+        await db.commit()
+
+
 async def test_downloads_require_sign_in(anon):
     _write({"AndroidManifest.xml": b"m"})
     assert (await anon.get("/api/downloads/android")).status_code == 401
@@ -27,6 +36,7 @@ async def test_downloads_require_sign_in(anon):
 
 
 async def test_android_unavailable_without_apk(client):
+    await _approve(client)
     APK.unlink(missing_ok=True)
     r = await client.get("/api/downloads/android")
     assert r.status_code == 200 and r.json()["available"] is False
@@ -34,11 +44,13 @@ async def test_android_unavailable_without_apk(client):
 
 
 async def test_non_apk_zip_is_not_offered(client):
+    await _approve(client)
     _write({"index.html": b"<script>alert(1)</script>"})
     assert (await client.get("/api/downloads/android")).json()["available"] is False
 
 
 async def test_android_download(client):
+    await _approve(client)
     data = _write({"AndroidManifest.xml": b"\x03\x00manifest", "classes.dex": b"dex\n035" + b"x" * 4000})
     info = (await client.get("/api/downloads/android")).json()
     assert info["available"] and info["version"] == "1.0.0-beta"
@@ -57,3 +69,23 @@ async def test_android_download(client):
     assert (await client.get("/api/downloads/android/..%2F..%2Fhirelog.db")).status_code == 404
     assert (await client.get("/api/downloads/android/other.apk")).status_code == 404
     APK.unlink()
+
+
+async def test_access_request_flow(client):
+    data = _write({"AndroidManifest.xml": b"m"})
+    assert (await client.get("/api/downloads/access")).json()["status"] == "none"
+    r = await client.get("/api/downloads/android")
+    assert r.status_code == 403 and r.json()["detail"] == "app_access_required"
+    assert (await client.get("/api/downloads/android/HireLog-1.0.0-beta.apk")).status_code == 403
+
+    r = await client.post("/api/downloads/access", json={"note": "Android 14 tester"})
+    assert r.status_code == 200 and r.json()["status"] == "pending" and r.json()["note"] == "Android 14 tester"
+    assert (await client.get("/api/downloads/android")).status_code == 403
+    assert (await client.post("/api/downloads/access", json={"note": "x" * 501})).status_code == 422
+    assert (await client.post("/api/downloads/access", json={"status": "approved"})).status_code == 422
+
+    await _approve(client)
+    url = (await client.get("/api/downloads/android")).json()["url"]
+    assert (await client.get(url)).content == data
+    APK.unlink()
+
