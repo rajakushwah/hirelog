@@ -9,6 +9,7 @@ RUN npm run build
 FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
     HIRELOG_ENV=production \
+    HIRELOG_DATABASE_URL=sqlite+aiosqlite:////data/hirelog.db \
     HIRELOG_STORAGE_DIR=/data/uploads \
     HIRELOG_ANDROID_APK_PATH=/data/downloads/hirelog.apk \
     HIRELOG_FRONTEND_DIST=/app/frontend/dist
